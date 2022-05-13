@@ -797,6 +797,7 @@ function listCONF(obj) {
   }
 
   //Load meter settings
+  /*
   document.getElementById("checkboxMeter").checked = obj.meter[0].usemeter;
   document.getElementById("impkwh").value = obj.meter[0].kwhimp;
   document.getElementById("implen").value = obj.meter[0].implen;
@@ -806,11 +807,14 @@ function listCONF(obj) {
   document.getElementById("price").value = obj.meter[0].price;
   handleMeterType();
   handleMeter();
+  */
 
   //Load RFID settings
+  /*
   document.getElementById("gain").value = obj.rfid.rfidgain;
   document.getElementById("checkboxRfid").checked = obj.rfid.userfid;
   handleRFID();
+  */
 
   //Load NTP settings
   document.getElementById("DropDownTimezone").value = obj.ntp.timezone;
@@ -1683,13 +1687,14 @@ function listStats(obj) {
   document.getElementById("evse_2005").innerHTML = obj.evse_2005;				//2005
   document.getElementById("evse_sharing_mode").innerHTML = obj.evse_sharing_mode;//2006
   document.getElementById("pp_detection").innerHTML = obj.evse_pp_detection;	//2007
+  /*
   document.getElementById("meter_total").innerHTML = obj.meter_total;
   document.getElementById("meter_p1").innerHTML = obj.meter_p1;
   document.getElementById("meter_p2").innerHTML = obj.meter_p2;
   document.getElementById("meter_p3").innerHTML = obj.meter_p3;
   document.getElementById("meter_v1").innerHTML = obj.meter_p1_v;
   document.getElementById("meter_v2").innerHTML = obj.meter_p2_v;
-  document.getElementById("meter_v3").innerHTML = obj.meter_p3_v;
+  document.getElementById("meter_v3").innerHTML = obj.meter_p3_v;*/
   if (obj.hasOwnProperty("rssi")) {
     document.getElementById("rssi").innerHTML = " (" + obj.rssi + "dBm)";
     document.getElementById("rssi").style.fontWeight = 'bold';
