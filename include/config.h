@@ -26,6 +26,7 @@ struct s_wifiConfig {
     const char* dns;
 };
 
+#if USE_METER
 struct s_meterConfig {
     bool usemeter;
     const char* metertype;
@@ -36,6 +37,7 @@ struct s_meterConfig {
     uint8_t meterphase;
     uint8_t factor;
 };
+#endif
 
 struct s_rfidConfig {
     bool userfid;
@@ -110,6 +112,7 @@ public:
     const char * ICACHE_FLASH_ATTR getWiFiGateway();
     const char * ICACHE_FLASH_ATTR getWiFiDns();
 
+#if USE_METER
 // meterConfig
     bool ICACHE_FLASH_ATTR getMeterActive(uint8_t meterId);
     const char * ICACHE_FLASH_ATTR getMeterType(uint8_t meterId);
@@ -123,6 +126,7 @@ public:
     bool useMMeter;
     bool mMeterTypeSDM120;
     bool mMeterTypeSDM630;
+#endif
 
 #if USE_RFID
 // rfidConfig
@@ -180,7 +184,9 @@ public:
 
 private:
     s_wifiConfig wifiConfig;
+#if USE_METER
     s_meterConfig meterConfig[1];
+#endif
 #if USE_RFID
     s_rfidConfig rfidConfig;
 #endif

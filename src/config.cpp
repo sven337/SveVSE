@@ -65,7 +65,7 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::loadConfig(String givenConfig) {
     wifiConfig.gateway = strdup(jsonDoc["wifi"]["gateway"]);
     wifiConfig.dns = strdup(jsonDoc["wifi"]["dns"]);
     Serial.println("WIFI loaded");
-
+#if USE_METER
     // meterConfig
     meterConfig[0].usemeter = jsonDoc["meter"][0]["usemeter"];
     meterConfig[0].metertype = strdup(jsonDoc["meter"][0]["metertype"]);
@@ -76,6 +76,7 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::loadConfig(String givenConfig) {
     meterConfig[0].meterphase = jsonDoc["meter"][0]["meterphase"];
     meterConfig[0].factor = jsonDoc["meter"][0]["factor"];
     Serial.println("METER loaded");
+#endif
 
 #if USE_RFID
     // rfidConfig
@@ -208,6 +209,7 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::loadConfig(String givenConfig) {
     return true;
 }
 bool ICACHE_FLASH_ATTR EvseWiFiConfig::loadConfiguration() {
+#if USE_METER
     // meterConfig
     useMMeter = false;
     useSMeter = false;
@@ -229,6 +231,7 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::loadConfiguration() {
             Serial.println("Use SDM630");
         }
     }
+#endif
     return true;
 }
 bool ICACHE_FLASH_ATTR EvseWiFiConfig::printConfigFile() {
@@ -264,6 +267,7 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::printConfig() {
     Serial.println("gateway: " + String(getWiFiGateway()));
     Serial.println("dns: " + String(getWiFiDns()));
     Serial.println();
+#if USE_METER
     Serial.println("// Meter Config");
     Serial.println("usemeter: " + String(getMeterActive(0)));
     Serial.println("metertype: " + String(getMeterType(0)));
@@ -274,6 +278,7 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::printConfig() {
     Serial.println("meterphase: " + String(getMeterPhaseCount(0)));
     Serial.println("factor: " + String(getMeterFactor(0)));
     Serial.println();
+#endif
 #if USE_RFID
     Serial.println("// RFID Config");
     Serial.println("userfid: " + String(getRfidActive()));
@@ -354,6 +359,7 @@ String ICACHE_FLASH_ATTR EvseWiFiConfig::getConfigJson() {
     wifiItem["gateway"] = this->getWiFiGateway();
     wifiItem["dns"] = this->getWiFiDns();
 
+#if USE_METER
     JsonArray meterArray = rootDoc.createNestedArray("meter");
     JsonObject meterObject_0 = meterArray.createNestedObject();
     meterObject_0["usemeter"] = this->getMeterActive(0);
@@ -372,6 +378,7 @@ String ICACHE_FLASH_ATTR EvseWiFiConfig::getConfigJson() {
     }
     meterObject_0["meterphase"] = this->getMeterPhaseCount(0);
     meterObject_0["factor"] = this->getMeterFactor(0);
+#endif
 
 #if USE_RFID
     JsonObject rfidItem = rootDoc.createNestedObject("rfid");
@@ -588,6 +595,7 @@ const char * ICACHE_FLASH_ATTR EvseWiFiConfig::getWiFiDns() {
     return "";
 }
 
+#if USE_METER
 // meterConfig getter/setter
 bool ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterActive(uint8_t meterId){
     return meterConfig[meterId].usemeter;
@@ -624,6 +632,7 @@ uint8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterFactor(uint8_t meterId) {
     if (meterConfig[meterId].factor) return meterConfig[meterId].factor;
     return 1;
 }
+#endif
 
 // rfidConfig getter/setter
 #if USE_RFID
