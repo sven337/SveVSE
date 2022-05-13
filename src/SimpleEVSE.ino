@@ -576,17 +576,6 @@ String ICACHE_FLASH_ATTR printSubnet(uint8_t mask) {
 }
 #endif
 
-void ICACHE_FLASH_ATTR parseBytes(const char* str, char sep, byte* bytes, int maxBytes, int base) {
-  for (int i = 0; i < maxBytes; i++) {
-    bytes[i] = strtoul(str, NULL, base);
-    str = strchr(str, sep);
-    if (str == NULL || *str == '\0') {
-      break;
-    }
-    str++;
-  }
-}
-
 #if USE_METER
 void ICACHE_RAM_ATTR handleMeterInt() {  //interrupt routine for metering
   if (meterImpMillis < millis()) {
@@ -2524,40 +2513,16 @@ void setModbusTCPRegisters() {
 //////////////////////////////////////////////////////////////////////////////////////////
 ///////       Setup Functions
 //////////////////////////////////////////////////////////////////////////////////////////
-bool ICACHE_FLASH_ATTR connectSTA(const char* ssid, const char* password, byte bssid[6]) {
+bool ICACHE_FLASH_ATTR connectSTA(const char* ssid, const char* password) {
   delay(100);
   WiFi.mode(WIFI_STA);
 
-  WiFi.begin(ssid, password, 0, bssid);
+  WiFi.begin(ssid, password, 0);
   slog.log(ntp.iso8601DateTime() + "[ INFO ] Trying to connect WiFi: ");
   slog.log(ssid);
 
   unsigned long now = millis();
-  uint8_t timeout = 10;  // seconds
-  do {
-    if (WiFi.status() == WL_CONNECTED) {
-      break;
-    }
-    delay(500);
-    slog.log(".");
-  }
-  while (millis() - now < timeout * 1000);
-  slog.logln("");
-  if (WiFi.status() == WL_CONNECTED) {
-    isWifiConnected = true;
-    return true;
-  }
-
-  //Try again without given BSSID
-  WiFi.disconnect();
-  delay(100);
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password, 0);
-  //if(config.getSystemDebug()) slog.logln("");
-  slog.logln(ntp.iso8601DateTime() + "[ WARN ] Couldn't connect in time");
-  slog.log(ntp.iso8601DateTime() + "[ INFO ] Trying to connect WiFi without given BSSID: ");
-  slog.log(ssid);
-  now = millis();
+  uint8_t timeout = 20;  // seconds
   do {
     if (WiFi.status() == WL_CONNECTED) {
       break;
@@ -2829,10 +2794,7 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
   WiFi.hostname(config.getSystemHostname());
   #endif
 
-  byte bssid[6];
-  parseBytes(config.getWifiBssid(), ':', bssid, 6, 16);
-
-  if (!connectSTA(config.getWifiSsid(), config.getWifiPass(), bssid)) {
+  if (!connectSTA(config.getWifiSsid(), config.getWifiPass())) {
     return false;
   }
   if (!MDNS.begin(config.getSystemHostname())) {
