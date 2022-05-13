@@ -1,3 +1,4 @@
+#if 0
 #include <rfid.h>
 
 MFRC522 mfrc522 = MFRC522();
@@ -196,3 +197,4 @@ bool ICACHE_FLASH_ATTR EvseWiFiRfid::reset() {
   mfrc522.PCD_Init();
   return true;
 }
+#endif
