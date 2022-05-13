@@ -1,4 +1,5 @@
-#if 0
+#include "features.h"
+#if USE_RFID
 #include <rfid.h>
 
 MFRC522 mfrc522 = MFRC522();

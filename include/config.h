@@ -1,3 +1,5 @@
+#include "features.h"
+
 #ifndef CONFIG_H_
 #define CONFIG_H_
 
@@ -122,11 +124,13 @@ public:
     bool mMeterTypeSDM120;
     bool mMeterTypeSDM630;
 
+#if USE_RFID
 // rfidConfig
     bool ICACHE_FLASH_ATTR getRfidActive();
     uint8_t ICACHE_FLASH_ATTR getRfidPin();
     uint8_t ICACHE_FLASH_ATTR getRfidUsePN532();
     int8_t ICACHE_FLASH_ATTR getRfidGain();
+#endif
 
 // ntpConfig
     int8_t ICACHE_FLASH_ATTR getNtpTimezone();
@@ -177,7 +181,9 @@ public:
 private:
     s_wifiConfig wifiConfig;
     s_meterConfig meterConfig[1];
+#if USE_RFID
     s_rfidConfig rfidConfig;
+#endif
     s_ntpConfig ntpConfig;
     s_buttonConfig buttonConfig[1];
     s_systemConfig systemConfig;

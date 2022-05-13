@@ -77,11 +77,13 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::loadConfig(String givenConfig) {
     meterConfig[0].factor = jsonDoc["meter"][0]["factor"];
     Serial.println("METER loaded");
 
+#if USE_RFID
     // rfidConfig
     rfidConfig.userfid = jsonDoc["rfid"]["userfid"];
     rfidConfig.sspin = jsonDoc["rfid"]["sspin"];
     rfidConfig.rfidgain = jsonDoc["rfid"]["rfidgain"];
     Serial.println("RFID loaded");
+#endif
 
     // ntpConfig
     ntpConfig.timezone = jsonDoc["ntp"]["timezone"];
@@ -272,11 +274,13 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::printConfig() {
     Serial.println("meterphase: " + String(getMeterPhaseCount(0)));
     Serial.println("factor: " + String(getMeterFactor(0)));
     Serial.println();
+#if USE_RFID
     Serial.println("// RFID Config");
     Serial.println("userfid: " + String(getRfidActive()));
     Serial.println("sspin: " + String(getRfidPin()));
     Serial.println("rfidgain: " + String(getRfidGain()));
     Serial.println();
+#endif
     Serial.println("// NTP Config");
     Serial.println("timezone: " + String(getNtpTimezone()));
     Serial.println("ntpip: " + String(getNtpIp()));
@@ -369,10 +373,12 @@ String ICACHE_FLASH_ATTR EvseWiFiConfig::getConfigJson() {
     meterObject_0["meterphase"] = this->getMeterPhaseCount(0);
     meterObject_0["factor"] = this->getMeterFactor(0);
 
+#if USE_RFID
     JsonObject rfidItem = rootDoc.createNestedObject("rfid");
     rfidItem["userfid"] = this->getRfidActive();
     rfidItem["sspin"] = this->getRfidPin();
     rfidItem["rfidgain"] = this->getRfidGain();
+#endif
 
     JsonObject ntpItem = rootDoc.createNestedObject("ntp");
     ntpItem["timezone"] = this->getNtpTimezone();
@@ -620,6 +626,7 @@ uint8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterFactor(uint8_t meterId) {
 }
 
 // rfidConfig getter/setter
+#if USE_RFID
 bool ICACHE_FLASH_ATTR EvseWiFiConfig::getRfidActive(){
     return rfidConfig.userfid;
 }
@@ -639,6 +646,7 @@ uint8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getRfidPin() {
 int8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getRfidGain() {
     return rfidConfig.rfidgain;
 }
+#endif
 
 // ntpConfig getter/setter
 int8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getNtpTimezone() {
