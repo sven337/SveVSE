@@ -215,7 +215,6 @@ uint16_t evseRcdStatus;     //Register 1007
 s_addEvseData addEvseData;
 
 //Settings
-bool useRFID = false;
 bool dontUseWsAuthentication = false;
 bool dontUseLED = false;
 bool resetCurrentAfterCharge = false;
