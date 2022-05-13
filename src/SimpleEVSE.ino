@@ -3328,7 +3328,7 @@ void ICACHE_FLASH_ATTR startWebserver() {
 //////////////////////////////////////////////////////////////////////////////////////////
 ///////       Setup
 //////////////////////////////////////////////////////////////////////////////////////////
-void ICACHE_RAM_ATTR setup() {
+void ICACHE_FLASH_ATTR setup() {
   Serial.begin(9600);
   if(config.getSystemDebug()) slog.logln("");
   if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ INFO ] EVSE-WiFi - version ");
