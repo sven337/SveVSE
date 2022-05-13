@@ -457,6 +457,7 @@ String ICACHE_FLASH_ATTR printIP(IPAddress address) {
   return (String)address[0] + "." + (String)address[1] + "." + (String)address[2] + "." + (String)address[3];
 }
 
+#if 0
 bool ICACHE_FLASH_ATTR setSmartWb11kWSettings() {
   //Load and Save config file for smartWB
   if (config.saveConfigFile(SRC_CONFIG_TEMPLATE_SMARTWB11KW)) {
@@ -552,6 +553,7 @@ bool ICACHE_FLASH_ATTR setSmartWb11kWSettings() {
     return true;
   }
 }
+#endif
 
 #ifndef ESP8266
 String ICACHE_FLASH_ATTR printSubnet(uint8_t mask) {
