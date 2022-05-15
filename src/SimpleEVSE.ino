@@ -155,7 +155,6 @@ bool toReboot = false;
 bool updateRunning = false;
 bool fsWorking = false;
 bool deactivatedByRemoteHeartbeat = false;
-bool toSetSmartWb11kwFactorySettings = false;
 
 //EVSE Modbus Registers
 uint16_t evseAmpsConfig;    //Register 1000
@@ -392,103 +391,6 @@ String ICACHE_FLASH_ATTR printIP(IPAddress address) {
   return (String)address[0] + "." + (String)address[1] + "." + (String)address[2] + "." + (String)address[3];
 }
 
-#if 0
-bool ICACHE_FLASH_ATTR setSmartWb11kWSettings() {
-  //Load and Save config file for smartWB
-  if (config.saveConfigFile(SRC_CONFIG_TEMPLATE_SMARTWB11KW)) {
-    slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] config.json for smartWB 11kW successfully loaded and saved");
-  }
-  else {
-    slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] [ !!! ] Error while loading config.json for smartWB 11kW!");
-  }
-
-  bool err = false;
-// Setting SDM Meter ID
-  delay(200);
-  for (size_t i = 0; i < 3; i++) {
-    if (setSDMID() == false) {
-      delay(200);
-      err = true;
-      slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] [ !!! ] Error while setting SDM ID to 2");
-    }
-    else {
-      slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] SDM ID successfully set to 2");
-      err = false;
-      break;
-    }
-  }
-
-// Setting EVSE Registers for smartWB 11kW
-  delay(200);
-  for (size_t i = 0; i < 3; i++) {
-    if (setEVSERegister(2000, 16) == false) {
-      delay(200);
-      err = true;
-      slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] [ !!! ] Error while setting register 2000");
-    }
-    else {
-      slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] Register 2000 successfully set");
-      err = false;
-      break;
-    }
-  }
-  delay(200);
-  for (size_t i = 0; i < 3; i++) {
-    if (setEVSERegister(2002, 6) == false) {
-      delay(200);
-      err = true;
-      slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] [ !!! ] Error while setting register 2002");
-    }
-    else {
-      slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] Register 2002 successfully set");
-      err = false;
-      break;
-    }
-  }
-  delay(200);
-  for (size_t i = 0; i < 3; i++) {
-    if (setEVSERegister(2004, 0) == false) {
-      delay(200);
-      err = true;
-      slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] [ !!! ] Error while setting register 2004");
-    }
-    else {
-      slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] Register 2004 successfully set");
-      err = false;
-      break;
-    }
-  }
-  delay(200);
-  for (size_t i = 0; i < 3; i++) {
-    if (setEVSERegister(2007, 16) == false) {
-      delay(200);
-      err = true;
-      slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] [ !!! ] Error while setting register 2007");
-    }
-    else {
-      slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] Register 2007 successfully set");
-      err = false;
-      break;
-    }
-  }
-
-  slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] Going to interrupt CP for 500ms");
-  digitalWrite(config.getEvseCpIntPin(0), HIGH);
-  delay(500);
-  digitalWrite(config.getEvseCpIntPin(0), LOW);
-  slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] CP interrupt ended - going to Reboot now...");
-
-  toReboot = true;
-  if (err){
-    slog.logln(ntp.iso8601DateTime() + "[ !!! ] Error occured while setting settings and/or EVSE registers for smartWB 11kW (see error message/s)");
-    return false;
-  }
-  else {
-    slog.logln(ntp.iso8601DateTime() + "[ Auto-Config ] Settings and EVSE registers for smartWB 11kW successfully set");
-    return true;
-  }
-}
-#endif
 
 #ifndef ESP8266
 String ICACHE_FLASH_ATTR printSubnet(uint8_t mask) {
@@ -2320,13 +2222,7 @@ void ICACHE_FLASH_ATTR setWebEvents() {
     server.on("/setConfig", HTTP_GET, [](AsyncWebServerRequest * request) {
       awp = request->getParam(0);
       if (awp->name() == "config") {
-        if (strcmp(awp->value().c_str(), "smartwb11kw") == 0) {
-          toSetSmartWb11kwFactorySettings = true;
-          request->send(200, "text/plain", "S0_EVSE-WiFi is going to set registers and config for smartWB 11kW...");
-        }
-        else {
           request->send(200, "text/plain", "E1_could not set registers and config - wrong value");
-        }
       }
       else {
         request->send(200, "text/plain", "E2_could not set registers and config - wrong parameter");
@@ -2711,11 +2607,6 @@ void IRAM_ATTR loop() {
     sendStatus();
     toSendStatus = false;
   }
-#if 0
-  if (toSetSmartWb11kwFactorySettings) {
-    if (setSmartWb11kWSettings() == false) setSmartWb11kWSettings();
-  }
-#endif
 
   if(millisCheckTimer < millis()) {
     handleEVSETimer();
