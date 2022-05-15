@@ -26,19 +26,6 @@ struct s_wifiConfig {
     const char* dns;
 };
 
-#if USE_METER
-struct s_meterConfig {
-    bool usemeter;
-    const char* metertype;
-    float price;
-    uint8_t intpin;
-    uint16_t kwhimp;
-    uint16_t implen;
-    uint8_t meterphase;
-    uint8_t factor;
-};
-#endif
-
 struct s_rfidConfig {
     bool userfid;
     bool usePN532;

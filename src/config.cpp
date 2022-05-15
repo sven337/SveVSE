@@ -65,18 +65,6 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::loadConfig(String givenConfig) {
     wifiConfig.gateway = strdup(jsonDoc["wifi"]["gateway"]);
     wifiConfig.dns = strdup(jsonDoc["wifi"]["dns"]);
     Serial.println("WIFI loaded");
-#if USE_METER
-    // meterConfig
-    meterConfig[0].usemeter = jsonDoc["meter"][0]["usemeter"];
-    meterConfig[0].metertype = strdup(jsonDoc["meter"][0]["metertype"]);
-    meterConfig[0].price = jsonDoc["meter"][0]["price"];
-    meterConfig[0].intpin = jsonDoc["meter"][0]["intpin"];
-    meterConfig[0].kwhimp = jsonDoc["meter"][0]["kwhimp"];
-    meterConfig[0].implen = jsonDoc["meter"][0]["implen"];
-    meterConfig[0].meterphase = jsonDoc["meter"][0]["meterphase"];
-    meterConfig[0].factor = jsonDoc["meter"][0]["factor"];
-    Serial.println("METER loaded");
-#endif
 
     // ntpConfig
     ntpConfig.timezone = jsonDoc["ntp"]["timezone"];
@@ -201,29 +189,6 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::loadConfig(String givenConfig) {
     return true;
 }
 bool ICACHE_FLASH_ATTR EvseWiFiConfig::loadConfiguration() {
-#if USE_METER
-    // meterConfig
-    useMMeter = false;
-    useSMeter = false;
-    if (meterConfig[0].usemeter == true) {
-        Serial.println("Use Meter");
-        String type = meterConfig[0].metertype;
-        if (type == "S0") {
-            useSMeter = true;
-            Serial.println("Use S0");
-        }
-        else if (type == "SDM120") {
-            mMeterTypeSDM120 = true;
-            useMMeter = true;
-            Serial.println("Use SDM120");
-        }
-        else if (type == "SDM630") {
-            mMeterTypeSDM630 = true;
-            useMMeter = true;
-            Serial.println("Use SDM630");
-        }
-    }
-#endif
     return true;
 }
 bool ICACHE_FLASH_ATTR EvseWiFiConfig::printConfigFile() {
@@ -259,18 +224,6 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::printConfig() {
     Serial.println("gateway: " + String(getWiFiGateway()));
     Serial.println("dns: " + String(getWiFiDns()));
     Serial.println();
-#if USE_METER
-    Serial.println("// Meter Config");
-    Serial.println("usemeter: " + String(getMeterActive(0)));
-    Serial.println("metertype: " + String(getMeterType(0)));
-    Serial.println("price: " + String(getMeterEnergyPrice(0)));
-    Serial.println("intpin: " + String(getMeterPin(0)));
-    Serial.println("kwhimp: " + String(getMeterImpKwh(0)));
-    Serial.println("implen: " + String(getMeterImpLen(0)));
-    Serial.println("meterphase: " + String(getMeterPhaseCount(0)));
-    Serial.println("factor: " + String(getMeterFactor(0)));
-    Serial.println();
-#endif
     Serial.println("// NTP Config");
     Serial.println("timezone: " + String(getNtpTimezone()));
     Serial.println("ntpip: " + String(getNtpIp()));
@@ -343,27 +296,6 @@ String ICACHE_FLASH_ATTR EvseWiFiConfig::getConfigJson() {
     wifiItem["subnet"] = this->getWiFiSubnet();
     wifiItem["gateway"] = this->getWiFiGateway();
     wifiItem["dns"] = this->getWiFiDns();
-
-#if USE_METER
-    JsonArray meterArray = rootDoc.createNestedArray("meter");
-    JsonObject meterObject_0 = meterArray.createNestedObject();
-    meterObject_0["usemeter"] = this->getMeterActive(0);
-    meterObject_0["metertype"] = this->getMeterType(0);
-    meterObject_0["price"] = this->getMeterEnergyPrice(0);
-    std::string sMeterType = this->getMeterType(0);
-    if (sMeterType.substr(0,3) == "SDM") {
-        meterObject_0["intpin"] = 0;
-        meterObject_0["kwhimp"] = 0;
-        meterObject_0["implen"] = 0;
-    }
-    else {
-        //meterObject_0["intpin"] = this->getMeterPin(0);
-        meterObject_0["kwhimp"] = this->getMeterImpKwh(0);
-        meterObject_0["implen"] = this->getMeterImpLen(0);
-    }
-    meterObject_0["meterphase"] = this->getMeterPhaseCount(0);
-    meterObject_0["factor"] = this->getMeterFactor(0);
-#endif
 
     JsonObject ntpItem = rootDoc.createNestedObject("ntp");
     ntpItem["timezone"] = this->getNtpTimezone();
@@ -572,45 +504,6 @@ const char * ICACHE_FLASH_ATTR EvseWiFiConfig::getWiFiDns() {
     if (wifiConfig.dns) return wifiConfig.dns;
     return "";
 }
-
-#if USE_METER
-// meterConfig getter/setter
-bool ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterActive(uint8_t meterId){
-    return meterConfig[meterId].usemeter;
-}
-const char * ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterType(uint8_t meterId){
-    if (meterConfig[meterId].metertype) return meterConfig[meterId].metertype;
-    return "";
-}
-float ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterEnergyPrice(uint8_t meterId){
-    if (meterConfig[meterId].price) return meterConfig[meterId].price;
-    return 25;
-}
-uint8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterPin(uint8_t meterId) {
-    if (meterConfig[meterId].intpin) return meterConfig[meterId].intpin;
-    #ifdef ESP8266
-    return D3;
-    #else
-    return 17;
-    #endif
-}
-uint16_t ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterImpKwh(uint8_t meterId) {
-    if (meterConfig[meterId].kwhimp) return meterConfig[meterId].kwhimp;
-    return 1000;
-}
-uint16_t ICACHE_RAM_ATTR EvseWiFiConfig::getMeterImpLen(uint8_t meterId) {
-    if (meterConfig[meterId].implen) return (meterConfig[meterId].implen);
-    return 30;
-}
-uint8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterPhaseCount(uint8_t meterId) {
-    if (meterConfig[meterId].meterphase) return meterConfig[meterId].meterphase;
-    return 1;
-}
-uint8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterFactor(uint8_t meterId) {
-    if (meterConfig[meterId].factor) return meterConfig[meterId].factor;
-    return 1;
-}
-#endif
 
 // ntpConfig getter/setter
 int8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getNtpTimezone() {

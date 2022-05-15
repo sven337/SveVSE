@@ -103,35 +103,6 @@ bool rseActive = false;
 uint8_t currentBeforeRse = 0;
 #endif
 
-#if USE_METER
-//Metering
-float meterReading = 0.0;
-float meteredKWh = 0.0;
-float currentKW = 0.0;
-
-//Metering S0
-uint8_t meterTimeout = 10; //sec
-volatile unsigned long numberOfMeterImps = 0;
-unsigned long meterImpMillis = 0;
-unsigned long previousMeterMillis = 0;
-volatile uint8_t meterInterrupt = 0;
-
-//Metering Modbus
-bool noSDM = false;
-unsigned long millisUpdateMMeter = 0;
-unsigned long millisUpdateSMeter = 0;
-bool mMeterTypeSDM120 = false;
-bool mMeterTypeSDM630 = false;
-float startTotal;
-float endTotal;
-float currentP1 = 0.0;
-float currentP2 = 0.0;
-float currentP3 = 0.0;
-float voltageP1 = 0.0;
-float voltageP2 = 0.0;
-float voltageP3 = 0.0;
-#endif
-
 //objects and instances
 #ifdef ESP8266
 SoftwareSerial SecondSer(D1, D2); //SoftwareSerial object (RX, TX)
@@ -148,10 +119,6 @@ EvseWiFiOled oled;
 unsigned long millisOnTimeOled = 0;
 
 ModbusMaster evseNode;
-#if USE_METER
-ModbusMaster meterNode;
-ModbusIP modbusTCPServerNode;  //ModbusIP object
-#endif
 AsyncWebServer server(80);    // Create AsyncWebServer instance on port "80"
 AsyncWebSocket ws("/ws");     // Create WebSocket instance on URL "/ws"
 NtpClient ntp;
@@ -544,96 +511,6 @@ String ICACHE_FLASH_ATTR printSubnet(uint8_t mask) {
 }
 #endif
 
-#if USE_METER
-void ICACHE_RAM_ATTR handleMeterInt() {  //interrupt routine for metering
-  if (meterImpMillis < millis()) {
-    meterImpMillis = millis() + (config.getMeterImpLen(0) + 10);
-    meterInterrupt ++;
-    numberOfMeterImps ++;
-  }
-}
-
-void ICACHE_FLASH_ATTR updateS0MeterData() {
-  if (vehicleCharging) {
-    currentKW = 3600.0 / float(meterImpMillis - previousMeterMillis) / float(config.getMeterImpKwh(0) / 1000.0) * (float)config.getMeterFactor(0) ;  //Calculating kW
-    previousMeterMillis = meterImpMillis;
-    meteredKWh = float(numberOfMeterImps) / float(config.getMeterImpKwh(0) / 1000.0) / 1000.0 * float(config.getMeterFactor(0));
-  }
-  meterInterrupt = 0;
-}
-
-void ICACHE_FLASH_ATTR updateMMeterData() {
-  float fRes = 0.0;
-  if (config.mMeterTypeSDM120 == true) {
-    fRes = readMeter(0x000C);
-    if (fRes >= 0.0) {
-      currentKW = fRes / 1000.0;
-    }
-    fRes = readMeter(0x0156);
-    if (fRes >= 0.0) {
-      meterReading = fRes;    
-    }
-  }
-  else if (config.mMeterTypeSDM630 == true) {
-    fRes = readMeter(0x0034);
-    if (fRes >= 0.0) {
-      currentKW = fRes / 1000.0;
-    }
-    fRes = readMeter(0x0156);
-    if (fRes >= 0.0) {
-      meterReading = fRes;    
-    }
-  }
-  if (meterReading != 0.0 &&
-      vehicleCharging == true) {
-    meteredKWh = meterReading - startTotal;
-  }
-  if (startTotal == 0) {
-    meteredKWh = 0.0;
-  }
-  updateSDMMeterCurrent();
-  millisUpdateMMeter = millis() + 5000;
-}
-
-void ICACHE_FLASH_ATTR updateSDMMeterCurrent() {
-  if (noSDM) {
-    slog.logln(ntp.iso8601DateTime() + "[ ERR ] No SDM meter detected!");
-    return;
-  }
-  const int regsToRead = 12;
-  uint8_t result;
-  uint16_t iaRes[regsToRead];
-  meterNode.clearTransmitBuffer();
-  meterNode.clearResponseBuffer();
-  delay(50);
-  result = meterNode.readInputRegisters(0x0000, regsToRead); // read 6 registers starting at 0x0000
-
-  if (result != 0) {
-    slog.log(ntp.iso8601DateTime() + "[ ModBus ] Error ");
-    slog.log(result, true);
-    slog.logln(" occured while getting current Meter Data");
-    if (config.getEvseLedConfig(0) == 3) changeLedTimes(300, 300);
-    return;
-  }
-
-  for (int i = 0; i < regsToRead; i++) {
-    iaRes[i] = meterNode.getResponseBuffer(i);
-  }
-  ((uint16_t*)&voltageP1)[1]= iaRes[0];
-  ((uint16_t*)&voltageP1)[0]= iaRes[1];
-  ((uint16_t*)&voltageP2)[1]= iaRes[2];
-  ((uint16_t*)&voltageP2)[0]= iaRes[3];
-  ((uint16_t*)&voltageP3)[1]= iaRes[4];
-  ((uint16_t*)&voltageP3)[0]= iaRes[5];
-
-  ((uint16_t*)&currentP1)[1]= iaRes[6];
-  ((uint16_t*)&currentP1)[0]= iaRes[7];
-  ((uint16_t*)&currentP2)[1]= iaRes[8];
-  ((uint16_t*)&currentP2)[0]= iaRes[9];
-  ((uint16_t*)&currentP3)[1]= iaRes[10];
-  ((uint16_t*)&currentP3)[0]= iaRes[11];
-}
-#endif
 
 unsigned long ICACHE_FLASH_ATTR getChargingTime() {
   unsigned long iTime;
@@ -809,19 +686,6 @@ void ICACHE_FLASH_ATTR sendStatus() {
   jsonDoc["evse_2005"] = addEvseData.evseReg2005;                  //Reg 2005
   jsonDoc["evse_sharing_mode"] = addEvseData.evseShareMode;        //Reg 2006
   jsonDoc["evse_pp_detection"] = addEvseData.evsePpDetection;      //Reg 2007
-#if USE_METER
-  if (config.useMMeter) {
-      delay(10);
-      updateMMeterData();
-      jsonDoc["meter_total"] = meterReading;
-      jsonDoc["meter_p1"] = currentP1;
-      jsonDoc["meter_p2"] = currentP2;
-      jsonDoc["meter_p3"] = currentP3;
-      jsonDoc["meter_p1_v"] = voltageP1;
-      jsonDoc["meter_p2_v"] = voltageP2;
-      jsonDoc["meter_p3_v"] = voltageP3;
-  }
-#endif
   
   //serializeJsonPretty(jsonDoc, Serial);  //Debugging
   size_t len = measureJson(jsonDoc);
@@ -915,10 +779,6 @@ void ICACHE_FLASH_ATTR logLatest(String uid, String username) {
       jsonDoc3["timestamp"] = ntp.getUtcTimeNow();
       jsonDoc3["duration"] = 0;
       jsonDoc3["energy"] = 0;
-#if USE_METER
-      jsonDoc3["price"] = config.getMeterEnergyPrice(0);
-      jsonDoc3["reading"] = startTotal;
-#endif
       jsonDoc3["rEnd"] = 0;
       list.add(jsonDoc3);
 
@@ -979,9 +839,6 @@ void ICACHE_FLASH_ATTR readLogAtStartup() {
     lastUID = list[(list.size()-1)]["uid"].as<String>();
     lastUsername = list[(list.size()-1)]["username"].as<String>();
     startChargingTimestamp = list[(list.size()-1)]["timestamp"];
-#if USE_METER
-    if (config.useMMeter) startTotal = list[(list.size()-1)]["reading"];
-#endif
     vehicleCharging = true;
     fsWorking = false;
   }
@@ -1026,21 +883,12 @@ void ICACHE_FLASH_ATTR updateLog(bool incomplete) {
     if (!incomplete) {
       jsonDoc2["duration"] = getChargingTime();
       if (config.getWifiWmode() && getChargingTime() > 360000000) jsonDoc2["duration"] = String("e");
-#if USE_METER
-      jsonDoc2["energy"] = float(int((meteredKWh + 0.005) * 100.0)) / 100.0;
-      jsonDoc2["price"] = config.getMeterEnergyPrice(0);
-#endif
     }
     else {
       jsonDoc2["duration"] = String("e");
       jsonDoc2["energy"] = String("e");
       jsonDoc2["price"] = String("e");
     }
-#if USE_METER
-      if (config.useMMeter) jsonDoc2["reading"] = startTotal;
-      if (config.useMMeter) jsonDoc2["rEnd"] = endTotal;
-      currentKW = 0;
-#endif
     list.add(jsonDoc2);
     logFile = SPIFFS.open("/latestlog.json", "w");
     if (logFile) {
@@ -1065,46 +913,6 @@ void ICACHE_FLASH_ATTR updateLog(bool incomplete) {
   fsWorking = false;
 }
 
-#if USE_METER
-float ICACHE_FLASH_ATTR getS0MeterReading() {
-  float fMeterReading = 0.0;
-  if (!config.getSystemLogging()) {
-    return fMeterReading;
-  }
-
-  fsWorking = true;
-  File logFile = SPIFFS.open("/latestlog.json", "r");
-
-  if (logFile) {
-    size_t size = logFile.size();
-    std::unique_ptr<char[]> buf (new char[size]);
-    logFile.readBytes(buf.get(), size);
-    #ifndef ESP8266
-    DynamicJsonDocument jsonDoc(15000);
-    #else
-    DynamicJsonDocument jsonDoc(6500);
-    #endif
-    DeserializationError error = deserializeJson(jsonDoc, buf.get());
-    JsonArray list = jsonDoc["list"];
-    if (error) {
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Impossible to read log file");
-    }
-    else {
-      logFile.close();
-      for (size_t i = 0; i < list.size(); i++) {
-        JsonObject line = list.getElement(i);
-        if (line["energy"] != "e") {
-          fMeterReading += (float)line["energy"];
-        }
-      }
-    }
-  }
-  delay(100);
-  fsWorking = false;
-  return fMeterReading;
-}
-#endif
-
 bool ICACHE_FLASH_ATTR initLogFile() {
   bool ret = true;
   fsWorking = true;
@@ -1127,39 +935,6 @@ bool ICACHE_FLASH_ATTR initLogFile() {
   fsWorking = false;
   return ret;
 }
-
-//////////////////////////////////////////////////////////////////////////////////////////
-///////       Meter Modbus functions
-//////////////////////////////////////////////////////////////////////////////////////////
-#if USE_METER
-float ICACHE_FLASH_ATTR readMeter(uint16_t reg) {
-  if (noSDM) {
-    slog.logln(ntp.iso8601DateTime() + "[ ERR ] No SDM meter detected!");
-    return -1;
-  }
-  uint8_t result;
-  uint16_t iaRes[2];
-  float fResponse = -1;
-  meterNode.clearTransmitBuffer();
-  meterNode.clearResponseBuffer();
-  delay(50);
-  result = meterNode.readInputRegisters(reg, 2);  // read 2 registers starting at 'reg'
-  
-  if (result != 0) {
-    slog.log(ntp.iso8601DateTime() + "[ ModBus ] Error ");
-    slog.log(result, true);
-    slog.logln(" occured while getting Meter Data");
-    if (config.getEvseLedConfig(0) == 3) changeLedTimes(300, 300);
-  }
-  else {
-    iaRes[0] = meterNode.getResponseBuffer(0);
-    iaRes[1] = meterNode.getResponseBuffer(1);
-    ((uint16_t*)&fResponse)[1]= iaRes[0];
-    ((uint16_t*)&fResponse)[0]= iaRes[1];
-  }
-  return (fResponse);
-}
-#endif
 
 //////////////////////////////////////////////////////////////////////////////////////////
 ///////       EVSE Modbus functions
@@ -1376,9 +1151,6 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
           }
           turnOnOled();
           startChargingTimestamp = ntp.getUtcTimeNow();
-#if USE_METER
-          meteredKWh = 0.0;
-#endif
           vehicleCharging = true;
           lastUID = "vehicle";
           lastUsername = "vehicle";
@@ -1515,13 +1287,6 @@ bool ICACHE_FLASH_ATTR activateEVSE() {
   if (!config.getEvseAlwaysActive(0) && !timerActive) {   //Normal Mode
     static uint16_t iTransmit;
     turnOnOled();
-#if USE_METER
-    if (config.useMMeter) {
-      if (millisUpdateMMeter - millis() < 50) {
-        delay(50);
-      }
-    }
-#endif
     if (evseEvseState == 3 &&
       evseVehicleState != 0) {    //no modbus error occured
       iTransmit = reg2005DefaultValues + 8192;         // disable EVSE after charge
@@ -1552,17 +1317,6 @@ bool ICACHE_FLASH_ATTR activateEVSE() {
     if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ ModBus ] EVSE already active");
   }
 
-#if USE_METER
-  if (config.useMMeter) {
-    millisUpdateMMeter += 5000;
-    startTotal = meterReading;
-  }
-  else {
-    startTotal = getS0MeterReading();
-    numberOfMeterImps = 0;
-  }
-  meteredKWh = 0.0;
-#endif
   
   toActivateEVSE = false;
   evseActive = true;
@@ -1588,13 +1342,6 @@ bool ICACHE_FLASH_ATTR deactivateEVSE(bool logUpdate) {
     static uint16_t iTransmit = reg2005DefaultValues + 16384;  // deactivate evse
 
     uint8_t result;
-#if USE_METER
-    if (config.useMMeter) {
-      if (millisUpdateMMeter - millis() < 50) {
-        delay(50);
-      }
-    }
-#endif
 
     evseNode.clearTransmitBuffer();
     evseNode.setTransmitBuffer(0, iTransmit); // set word 0 of TX buffer (bits 15..0)
@@ -1616,15 +1363,6 @@ bool ICACHE_FLASH_ATTR deactivateEVSE(bool logUpdate) {
     stopChargingTimestamp = ntp.getUtcTimeNow();
   }
   manualStop = true;
-#if USE_METER
-  if (config.useMMeter) {
-    endTotal = meterReading;
-    meteredKWh = meterReading - startTotal;
-  }
-  else {
-    startTotal += meteredKWh;
-  }  
-#endif
   if (logUpdate) {
     updateLog(false);
   }
@@ -1682,51 +1420,6 @@ bool ICACHE_FLASH_ATTR setEVSEcurrent() {  // telegram 1: write EVSE current
   return true;
 }
 
-#if USE_METER
-bool ICACHE_FLASH_ATTR setSDMID() {
-  if (!config.useMMeter) {
-    slog.logln(ntp.iso8601DateTime() + "[ ERR ] No SDM meter configured!");
-    return false;
-  }
-
-  if (config.useMMeter) {   //short delay to prevent collisions
-    if (millisUpdateMMeter - millis() < 50) {
-      delay(50);
-    }
-  }
-  while (millisUpdateEvse > millis()) {
-    delay(1);
-  }
-
-  ModbusMaster _node;
-  HardwareSerial _ser(1);
-  _node.begin(1, _ser);
-
-  for (int i = 0; i < 5; i++) {
-    uint8_t result;
-    _node.clearTransmitBuffer();
-    _node.setTransmitBuffer(0, 0x4000); // set word 0 of TX buffer (bits 15..0)
-    _node.setTransmitBuffer(1, 0x0000); // set word 1 of TX buffer (bits 31..16)
-    result = _node.writeMultipleRegisters(0x0014, 2);  // write given register
-
-    if (result != 0) {
-      // error occured
-      slog.log(ntp.iso8601DateTime() + "[ ModBus ] Error ");
-      slog.log(result, true);
-      slog.logln(" occured while setting SDM Register 0x0014 to 2");
-      if (config.getEvseLedConfig(0) == 3) changeLedTimes(300, 300);
-      delay((i+1) * 50);
-    }
-    else {
-      // register successfully written
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ ModBus ] Register 0x0014 successfully set to 2");
-      millisUpdateEvse = millis() + 100;
-      return true;
-    }
-  }
-  return false;
-}
-#endif
 
 bool ICACHE_FLASH_ATTR setEVSERegister(uint16_t reg, uint16_t val) {
   if (noEVSE) {
@@ -1734,16 +1427,6 @@ bool ICACHE_FLASH_ATTR setEVSERegister(uint16_t reg, uint16_t val) {
     return false;
   }
 
-#if USE_METER
-  if (config.useMMeter) {   //short delay to prevent collisions
-    if (millisUpdateMMeter - millis() < 50) {
-      delay(50);
-    }
-  }
-  while (millisUpdateEvse > millis()) {
-    delay(1);
-  }
-#endif
 
 
   for (int i = 0; i < 5; i++) {
@@ -1800,18 +1483,6 @@ void ICACHE_FLASH_ATTR sendEVSEdata() {
     jsonDoc["evse_always_active"] = config.getEvseAlwaysActive(0);
     jsonDoc["evse_remote_controlled"] = config.getEvseRemote(0);
     jsonDoc["evse_timer_active"] = timerActive;
-#if USE_METER
-    jsonDoc["evse_current"] = String(currentKW, 2);
-    jsonDoc["evse_charged_kwh"] = String(meteredKWh, 2);
-    jsonDoc["evse_charged_amount"] = String((meteredKWh * float(config.getMeterEnergyPrice(0)) / 100.0), 2);
-    jsonDoc["evse_maximum_current"] = maxCurrent;
-    if (meteredKWh == 0.0) {
-      jsonDoc["evse_charged_mileage"] = "0.0";
-    }
-    else {
-      jsonDoc["evse_charged_mileage"] = String((meteredKWh * 100.0 / config.getEvseAvgConsumption(0)), 1);
-    }
-#endif
     jsonDoc["ap_mode"] = inAPMode;
     jsonDoc["evse_disabled_by_remote_hearbeat"] = deactivatedByRemoteHeartbeat;
     size_t len = measureJson(jsonDoc);
@@ -2115,239 +1786,6 @@ void ICACHE_FLASH_ATTR processWsEvent(JsonDocument& root, AsyncWebSocketClient *
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
-///////       Modbus/TCP Functions
-//////////////////////////////////////////////////////////////////////////////////////////
-#if USE_METER
-uint16_t onSetMbTCPHreg(TRegister *reg, uint16_t val) {
-  switch (reg->address.address) {
-  case 40000: // Configured Current
-    if (val <= config.getSystemMaxInstall() && val >= 6) {
-      toSetEVSEcurrent = true;
-      currentToSet = val;
-      return val;
-    }
-    else {
-      return false;
-    }
-    break;
-  case 40001: // Station Status
-    if (val == 1 && evseActive == false) {
-      toActivateEVSE = true;
-      return val;
-    }
-    else if (val == 0 && evseActive == true) {
-      toDeactivateEVSE = true;
-      return val;
-    }
-    return false;
-    break;
-  case 40003: // CP Interrupt
-    #ifndef ESP8266
-    if (val == 1) {
-      interruptCp();
-      return 0;
-    }
-    #endif
-    return false;
-    break;
-  default:
-    break;
-  }
-  return -1;
-}
-
-uint16_t onGetMbTCPHreg(TRegister *reg, uint16_t val) {
-  switch (reg->address.address) {
-  case 40000: // Configured Current
-    return evseAmpsConfig;
-    break;
-  case 40001: // Station Status
-    if (evseActive == false) return 0;
-    if (evseActive == true) return 1;
-    break;
-  case 40002: // RSE
-    if (digitalRead(config.getEvseRsePin(0)) == LOW && config.getEvseRseActive(0) == true) {
-      return 1;
-    }
-    else {
-      return 0;
-    }
-  default:
-    break;
-  }
-  return -1;
-}
-
-uint16_t onGetMbTCPIreg(TRegister *reg, uint16_t val)
-{
-
-  uint16_t _currentP1 = 0;
-  uint16_t _currentP2 = 0;
-  uint16_t _currentP3 = 0;
-  
-  if (config.getMeterPhaseCount(0) == 1) {
-    float fCurrent = float(int((currentKW / float(config.getMeterFactor(0)) / 0.227 + 0.005) * 100.0) / 100.0);
-    if (config.getMeterFactor(0) == 1) {
-      _currentP1 = fCurrent;
-      _currentP2 = 0.0;
-      _currentP3 = 0.0;
-    }
-    else if (config.getMeterFactor(0) == 2) {
-      _currentP1 = fCurrent;
-      _currentP2 = fCurrent;
-      _currentP3 = 0.0;
-    }
-    else if (config.getMeterFactor(0) == 3) {
-      _currentP1 = fCurrent;
-      _currentP2 = fCurrent;
-      _currentP3 = fCurrent;
-    }
-  }
-  else {
-    float fCurrent = float(int((currentKW / 0.227 / float(config.getMeterFactor(0)) / 3.0 + 0.005) * 100.0) / 100.0);
-    _currentP1 = fCurrent;
-    _currentP2 = fCurrent;
-    _currentP3 = fCurrent;
-  }
-
-  switch (reg->address.address) {
-  // Meter Data
-  case 30001:
-    if (config.useMMeter) return uint16_t(currentP1 * 100.0);
-    if (config.useSMeter) return uint16_t(_currentP1 * 100.0);
-    break;
-  case 30002:
-    if (config.useMMeter) return uint16_t(currentP2 * 100.0);
-    if (config.useSMeter) return uint16_t(_currentP2 * 100.0);
-    break;
-  case 30003:
-    if (config.useMMeter) return uint16_t(currentP3 * 100.0);
-    if (config.useSMeter) return uint16_t(_currentP3 * 100.0);
-    break;
-  case 30004:
-    if (config.useMMeter) return uint16_t(voltageP1 * 100.0);
-    if (config.useSMeter) return uint16_t(230 * 100);
-    break;
-  case 30005:
-    if (config.useMMeter) return uint16_t(voltageP2 * 100.0);
-    if (config.useSMeter && (config.getMeterFactor(0) == 2 || config.getMeterFactor(0) == 3 || config.getMeterPhaseCount(0) == 3)) return uint16_t(230 * 100);
-    return 0;
-    break;
-  case 30006:
-    if (config.useMMeter) return uint16_t(voltageP3 * 100.0);
-    if (config.useSMeter && (config.getMeterFactor(0) == 3 || config.getMeterPhaseCount(0) == 3)) return uint16_t(230 * 100);
-    return 0;
-    break;
-  case 30007: // Meter Reading 1
-    if (config.useMMeter == true) {
-      return get16bitOfFloat32(meterReading, 0);
-    }
-    else {
-      return get16bitOfFloat32((startTotal + meteredKWh), 0);
-    }
-    break;
-  case 30008: // Meter Reading 2
-    if (config.useMMeter == true) {
-      return get16bitOfFloat32(meterReading, 1);
-    }
-    else {
-      return get16bitOfFloat32((startTotal + meteredKWh), 1);
-    }
-    break;
-  case 30009: //Total Power (W) 1
-    return get16bitOfFloat32(currentKW, 0);
-    break;
-  case 30010: //Total Power (W) 2
-    return get16bitOfFloat32(currentKW, 1);
-    break;
-
-  // Charging Data
-  case 30100: // Vehicle State
-    return uint16_t(evseStatus);
-    break;
-  case 30101: // PP-Limit
-    return uint16_t(evseAmpsPP);
-    break;
-  case 30102: // Duration (s)
-    return uint16_t(getChargingTime() / 1000);
-    break;
-  case 30103: // Charged Energy 1
-    return get16bitOfFloat32(meteredKWh, 0);
-    break;
-  case 30104: // Charged Energy 2
-    return get16bitOfFloat32(meteredKWh, 1);
-    break;
-  case 30105: // Mileage (km)
-    return int(((meteredKWh * 100.0 / config.getEvseAvgConsumption(0)) + 0.05) * 10.0);
-    break;
-
-  // Charging Point Data
-  case 30200: // Operating Mode
-    if (config.getEvseRemote(0)) {
-      return 3;
-    }
-    if (config.getEvseAlwaysActive(0)) {
-      return 2;
-    }
-    return 1;
-    break;
-  case 30201: // Firmware Major
-    return sw_maj;
-    break;
-  case 30202: // Firmware Minor
-    return sw_min;
-    break;
-  case 30203: // Firmware Revision
-    return sw_rev;
-    break;
-  default:
-    break;
-  }
-  return -1;
-}
-
-void setModbusTCPRegisters() {
-  modbusTCPServerNode.server();
-
-  //Registers 30000
-  modbusTCPServerNode.addIreg(30001);
-  modbusTCPServerNode.addIreg(30002);
-  modbusTCPServerNode.addIreg(30003);
-  modbusTCPServerNode.addIreg(30004);
-  modbusTCPServerNode.addIreg(30005);
-  modbusTCPServerNode.addIreg(30006);
-  modbusTCPServerNode.addIreg(30007);
-  modbusTCPServerNode.addIreg(30008);
-  modbusTCPServerNode.addIreg(30009);
-  modbusTCPServerNode.addIreg(30010);
-  modbusTCPServerNode.onGetIreg(30001, onGetMbTCPIreg, 10);
-
-  modbusTCPServerNode.addIreg(30100);
-  modbusTCPServerNode.addIreg(30101);
-  modbusTCPServerNode.addIreg(30102);
-  modbusTCPServerNode.addIreg(30103);
-  modbusTCPServerNode.addIreg(30104);
-  modbusTCPServerNode.addIreg(30105);
-  modbusTCPServerNode.onGetIreg(30100, onGetMbTCPIreg, 6);
-  
-  modbusTCPServerNode.addIreg(30200);
-  modbusTCPServerNode.addIreg(30201);
-  modbusTCPServerNode.addIreg(30202);
-  modbusTCPServerNode.addIreg(30203);
-  modbusTCPServerNode.onGetIreg(30200, onGetMbTCPIreg, 4);
-
-  //Registers 40000
-  modbusTCPServerNode.addHreg(40000);
-  modbusTCPServerNode.addHreg(40001);
-  modbusTCPServerNode.addHreg(40002);
-  modbusTCPServerNode.addHreg(40003);
-  modbusTCPServerNode.onGetHreg(40000, onGetMbTCPHreg, 3);
-  modbusTCPServerNode.onSetHreg(40000, onSetMbTCPHreg, 2);
-  modbusTCPServerNode.onSetHreg(40003, onSetMbTCPHreg, 1);
-}
-#endif
-
-//////////////////////////////////////////////////////////////////////////////////////////
 ///////       Setup Functions
 //////////////////////////////////////////////////////////////////////////////////////////
 bool ICACHE_FLASH_ATTR connectSTA(const char* ssid, const char* password) {
@@ -2472,9 +1910,6 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
 
 #ifdef ESP8266
   SecondSer.begin(9600);
-#if USE_METER
-  meterNode.begin(2, Serial);
-#endif
   evseNode.begin(1, SecondSer);
   #else
 
@@ -2496,21 +1931,6 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
   }
 
   //SDM:
-#if USE_METER
-  if (config.useMMeter) {
-    if (checkUart(&FirstSer, 2)) { //SDM -> UART1
-      meterNode.begin(2, FirstSer);
-      slog.logln(ntp.iso8601DateTime() + "[ Modbus ] SDM detected at UART 1");
-    }
-    else if (checkUart(&SecondSer, 2)) { //SDM -> UART2
-      meterNode.begin(2, SecondSer);
-      slog.logln(ntp.iso8601DateTime() + "[ Modbus ] SDM detected at UART 2");
-    }
-    else {
-      noSDM = true;
-    }
-  }
-#endif
   #endif
 
   if (config.getSystemDebug()) {
@@ -2578,22 +1998,6 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
   if (config.getWifiWmode() == 1) {
     if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] EVSE-WiFi is running in AP Mode ");
     WiFi.disconnect(true);
-#if USE_METER
-    if (config.useMMeter) {
-      if ((evseActive && !config.getEvseAlwaysActive(0)) || (vehicleCharging && config.getEvseAlwaysActive(0))) {
-        if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] Vehicle is charging at startup");
-        readLogAtStartup();
-      }
-      else {
-        if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] Vehicle is NOT charging at startup");
-      }
-    }
-    else {  // Feature only supported with modbus meter
-      deactivateEVSE(false);  //initial deactivation
-      stopChargingTimestamp = 0;
-      vehicleCharging = false;
-    }
-#endif
     return startAP(config.getWifiSsid(), config.getWifiPass());
   }
 
@@ -2660,22 +2064,6 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
   delay(1000);
 
   // Handle boot while charging is active
-#if USE_METER
-  if ((evseActive && !config.getEvseAlwaysActive(0)) || (vehicleCharging && config.getEvseAlwaysActive(0))) {
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] Vehicle is charging at startup");
-    if (config.useMMeter){
-      readLogAtStartup();
-    }
-    else{ // Feature only supported with modbus meter
-      deactivateEVSE(false);  //initial deactivation
-      stopChargingTimestamp = 0;
-      vehicleCharging = false;
-    }
-  }
-  else {
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] Vehicle is NOT charging at startup");
-  }
-#endif
   return true;
 }
 
@@ -2771,56 +2159,6 @@ void ICACHE_FLASH_ATTR setWebEvents() {
       items["alwaysActive"] = config.getEvseAlwaysActive(0);
       items["lastActionUser"] = lastUsername;
       items["lastActionUID"] = lastUID;
-#if USE_METER
-      items["energy"] = float(int((meteredKWh + 0.005) * 100.0)) / 100.0;
-      items["mileage"] = float(int(((meteredKWh * 100.0 / config.getEvseAvgConsumption(0)) + 0.05) * 10.0)) / 10.0;
-      items["actualPower"] =  float(int((currentKW + 0.005) * 100.0)) / 100.0;
-      if (config.useMMeter) {
-        items["meterReading"] = float(int((meterReading + 0.005) * 100.0)) / 100.0;
-        items["currentP1"] = currentP1;
-        items["currentP2"] = currentP2;
-        items["currentP3"] = currentP3;
-        items["voltageP1"] = voltageP1;
-        items["voltageP2"] = voltageP2;
-        items["voltageP3"] = voltageP3;
-      }
-      else {
-        if (!vehicleCharging && !config.useMMeter) {
-          items["meterReading"] = float(int((startTotal + 0.005) * 100.0)) / 100.0;
-        }
-        else {
-          items["meterReading"] = float(int((startTotal + meteredKWh + 0.005) * 100.0)) / 100.0;
-        }
-        if (config.getMeterPhaseCount(0) == 1) {
-          float fCurrent = float(int((currentKW / float(config.getMeterFactor(0)) / 0.227 + 0.005) * 100.0) / 100.0);
-          if (config.getMeterFactor(0) == 1) {
-            items["currentP1"] = fCurrent;
-            items["currentP2"] = 0.0;
-            items["currentP3"] = 0.0;
-          }
-          else if (config.getMeterFactor(0) == 2) {
-            items["currentP1"] = fCurrent;
-            items["currentP2"] = fCurrent;
-            items["currentP3"] = 0.0;
-          }
-          else if (config.getMeterFactor(0) == 3) {
-            items["currentP1"] = fCurrent;
-            items["currentP2"] = fCurrent;
-            items["currentP3"] = fCurrent;
-          }
-        }
-        else {
-          float fCurrent = float(int((currentKW / 0.227 / float(config.getMeterFactor(0)) / 3.0 + 0.005) * 100.0) / 100.0);
-          items["currentP1"] = fCurrent;
-          items["currentP2"] = fCurrent;
-          items["currentP3"] = fCurrent;
-        }   // S0 meter -> no voltage available
-        items["voltageP1"] = 0;
-        items["voltageP2"] = 0;
-        items["voltageP3"] = 0;
-      }
-      items["useMeter"] = config.getMeterActive(0);
-#endif
 
       remoteHeartbeatCounter = 0; // Reset Heartbeat Counter
 
@@ -2926,18 +2264,6 @@ void ICACHE_FLASH_ATTR setWebEvents() {
     });
     #endif
 
-    //setSDMID
-#if USE_METER
-    server.on("/setSDMID", HTTP_GET, [](AsyncWebServerRequest * request) {
-      if (setSDMID()) {
-        request->send(200, "text/plain", "S0_SDM ID set to 2");
-      }
-      else {
-        request->send(200, "text/plain", "E0_Error while setting SDM ID to 2");
-      }
-    });
-#endif
-    
     //doReboot
     server.on("/doReboot", HTTP_GET, [](AsyncWebServerRequest * request) {
       awp = request->getParam(0);
@@ -3224,15 +2550,6 @@ void ICACHE_FLASH_ATTR setup() {
       if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Button is pressed...");
     }
   }
-#if USE_METER
-  if (config.useSMeter) {
-    pinMode(config.getMeterPin(0), INPUT_PULLUP);
-    attachInterrupt(digitalPinToInterrupt(config.getMeterPin(0)), handleMeterInt, FALLING);
-    if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ Meter ] Use GPIO/Pin ");
-    if(config.getSystemDebug()) slog.logln(config.getMeterPin(0));
-    startTotal = getS0MeterReading();
-  }
-#endif
 
 #ifndef ESP8266
   pinMode(config.getEvseRsePin(0), INPUT_PULLUP);
@@ -3250,9 +2567,6 @@ void ICACHE_FLASH_ATTR setup() {
   if (config.getEvseRemote(0)) sliderStatus = false;
 
   MDNS.addService("http", "tcp", 80);
-#if USE_METER
-  setModbusTCPRegisters();
-#endif
   #ifdef ESP32
  // Show IP Address on oLED
   String ip = "IP: ";
@@ -3296,9 +2610,6 @@ void IRAM_ATTR loop() {
   }*/
 
   handleLed();
-#if USE_METER
-  modbusTCPServerNode.task();
-#endif
 
   if (config.getEvseRemote(0) && millisRemoteHeartbeat < millis()) {
     updateRemoteHeartbeat();
@@ -3318,19 +2629,6 @@ void IRAM_ATTR loop() {
   if (!updateRunning) { //Update Modbus data every 3000ms and send data to WebUI
     updateEvseData();
   }
-#if USE_METER
-  if (config.useMMeter && millisUpdateMMeter < millis() && !updateRunning) {
-    updateMMeterData();
-  }
-  if (meterInterrupt != 0) {
-    updateS0MeterData();
-  }
-  if (config.useSMeter && previousMeterMillis < millis() - (meterTimeout * 1000)) {  //Timeout when there is less than ~300 watt power consuption -> 10 sec of no interrupt from meter
-    if (previousMeterMillis != 0) {
-      currentKW = 0.0;
-    }
-  }
-#endif
   if (toSetEVSEcurrent && millisUpdateEvse < millis() && !updateRunning) {
     setEVSEcurrent();
   }
