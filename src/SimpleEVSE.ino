@@ -52,10 +52,6 @@
 #include "websrc.h"
 #include "config.h"
 #include "templates.h"
-#if USE_RFID
-#include <MFRC522.h>                  // Library for Mifare RC522 Devices
-#include "rfid.h"
-#endif
 
 
 uint8_t sw_min = 3; //Firmware Minor Version
@@ -105,15 +101,6 @@ uint32_t mbReadCount = 0;
 unsigned long millisInterruptCp = 0;
 bool rseActive = false;
 uint8_t currentBeforeRse = 0;
-#endif
-
-//RFID
-#if USE_RFID
-bool showLedRfidDecline = false;
-bool showLedRfidGrant = false;
-unsigned long millisRfidLedAction = 0;
-unsigned long millisRfidReset = 0;
-String lastRFIDUID = "";
 #endif
 
 #if USE_METER
@@ -169,9 +156,6 @@ AsyncWebServer server(80);    // Create AsyncWebServer instance on port "80"
 AsyncWebSocket ws("/ws");     // Create WebSocket instance on URL "/ws"
 NtpClient ntp;
 EvseWiFiConfig config = EvseWiFiConfig();
-#if USE_RFID
-EvseWiFiRfid rfid;
-#endif
 //DynamicJsonDocument syslogJson(24576);
 std::deque<String> syslogDeque;
 
@@ -401,22 +385,6 @@ uint16_t get16bitOfFloat32 (float float_number, uint8_t offset){
 }
 
 void ICACHE_FLASH_ATTR handleLed() {
-#if USE_RFID
-  if (showLedRfidGrant && millis() < millisRfidLedAction) {
-    digitalWrite(config.getEvseLedPin(0), HIGH);
-    return;
-  }
-  else if (showLedRfidGrant && millis() >= millisRfidLedAction) {
-    showLedRfidGrant = false;
-    digitalWrite(config.getEvseLedPin(0), LOW);
-    return;
-  }
-  else if (showLedRfidDecline && millis() >= millisRfidLedAction) {
-    showLedRfidDecline = false;
-    changeLedTimes(100, 10000);
-    return;
-  }
-#endif
   if (currentMillis >= previousLedAction && config.getEvseLedConfig(0) != 1) {
     if (ledStatus == false) {
       if (currentMillis >= previousLedAction + ledOffTime) {
@@ -725,107 +693,6 @@ bool ICACHE_FLASH_ATTR reconnectWiFi() {
 //////////////////////////////////////////////////////////////////////////////////////////
 ///////       RFID Functions
 //////////////////////////////////////////////////////////////////////////////////////////
-#if USE_RFID
-void ICACHE_FLASH_ATTR rfidloop() {
-  
-  scanResult scan = rfid.readPicc();
-  
-  if (millisRfidReset < millis() && config.getRfidActive()) {
-    rfid.reset();
-    millisRfidReset = millis() + 1000;
-  }
-
-  if (scan.read) {
-    if (config.getSystemDebug()) { /*
-      slog.log(ntp.iso8601DateTime() + "UID: ");
-      slog.logln(scan.uid);
-      slog.log(ntp.iso8601DateTime() + "User: ");
-      slog.logln(scan.user);
-      slog.log(ntp.iso8601DateTime() + "Type: ");
-      slog.logln(scan.type);
-      slog.log(ntp.iso8601DateTime() + "Known: ");
-      slog.logln(scan.known);
-      slog.log(ntp.iso8601DateTime() + "Valid: ");
-      slog.logln(scan.valid); */
-    }
-    
-    if (scan.uid.length() == 7) {
-      lastRFIDUID = "0" + scan.uid;
-    }
-    else {
-      lastRFIDUID = scan.uid;
-    }
-
-    StaticJsonDocument<230> jsonDoc;
-    jsonDoc["command"] = "piccscan";
-    jsonDoc["uid"] = scan.uid;
-    jsonDoc["type"] = scan.type;
-    
-    #ifdef ESP32
-    if (config.getEvseAlwaysActive(0) || timerActive) {    // In AA/Remote just turnOnOled and leave
-      if (millisOnTimeOled < millis()) {                   // Init lastRFIDUID if OLED is on (second read is needed for RFID Action)
-        turnOnOled();
-        lastRFIDUID = "";
-      }
-      else {
-        millisUpdateOled = millis() + 3000;
-        oled.showCheck(true, 3);
-      }
-      return;
-    }
-    if (!config.getEvseAlwaysActive(0) && !timerActive &&   // If oLED is turned off, just turn it on and leave
-      millisOnTimeOled < millis()) {        // To activate EVSE, a second RFID read is necessary
-        turnOnOled();
-        return;
-    }
-    #endif
-
-    lastUID = scan.uid;
-    if (scan.known) { // PICC known
-      //slog.logln(ntp.iso8601DateTime() + "PICC known");
-      lastUsername = scan.user;
-      jsonDoc["known"] = 1;
-      jsonDoc["user"] = scan.user;
-    }
-    else { // Unknown PICC
-      lastUsername = "Unknown";
-      jsonDoc["known"] = 0;
-    }
-
-    if (scan.valid) {  // PICC valid
-      //slog.logln(ntp.iso8601DateTime() + "PICC valid");
-      if (evseActive) {
-        toDeactivateEVSE = true;
-      }
-      else {
-        toActivateEVSE = true;
-      }
-      #ifndef ESP8266
-      millisUpdateOled = millis() + 3000;
-      oled.showCheck(true, 0);
-      #endif
-      showLedRfidGrant = true;
-    }
-    else {
-      #ifndef ESP8266
-      millisUpdateOled = millis() + 3000;
-      oled.showCheck(false, 0);
-      #endif
-      showLedRfidDecline = true;
-      changeLedTimes(70, 70);
-    }
-    millisRfidLedAction = millis() + 1000;
-
-    size_t len = measureJson(jsonDoc);
-    AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len);
-    if (buffer) {
-      serializeJson(jsonDoc, (char *)buffer->get(), len + 1);
-      ws.textAll(buffer);
-    }
-  }
-}
-#endif 
-
 void ICACHE_FLASH_ATTR sendStatus() {
   fsWorking = true;
   #ifdef ESP8266
@@ -1482,9 +1349,6 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
       if (evseStatus != 1) {
         turnOnOled();
       }
-#if USE_RFID
-      lastRFIDUID = "";
-#endif
       evseStatus = 1; // ready
       evseActive = true;
     }
@@ -1709,9 +1573,6 @@ bool ICACHE_FLASH_ATTR activateEVSE() {
   //millisUpdateOled = millis() + 3000;
   //oled.showCheck(false);
   #endif
-#if USE_RFID
-  showLedRfidGrant = true;
-#endif
   sendEVSEdata();
   return true;
 }
@@ -2024,26 +1885,6 @@ void ICACHE_FLASH_ATTR sendEvseTimer(AsyncWebSocketClient * client) {
   client->text(file);
 }
 
-void ICACHE_FLASH_ATTR sendUserList(int page, AsyncWebSocketClient * client) {
-#if USE_RFID
-  DynamicJsonDocument jsonDoc(3000);
-  jsonDoc = rfid.getUserList(page);
-  size_t len = measureJson(jsonDoc);
-  AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len);
-  if (buffer) {
-    serializeJson(jsonDoc, (char *)buffer->get(), len + 1);
-    if (client) {
-      client->text(buffer);
-      client->text("{\"command\":\"result\",\"resultof\":\"userlist\",\"result\": true}");
-    } else {
-      ws.textAll("{\"command\":\"result\",\"resultof\":\"userlist\",\"result\": false}");
-    }
-  }
-#else
-    ws.textAll("{\"command\":\"result\",\"resultof\":\"userlist\",\"result\": false}");
-#endif
-}
-
 #ifndef ESP8266
 bool ICACHE_FLASH_ATTR interruptCp() {
   digitalWrite(config.getEvseCpIntPin(0), HIGH);
@@ -2144,10 +1985,6 @@ void ICACHE_FLASH_ATTR processWsEvent(JsonDocument& root, AsyncWebSocketClient *
     else {
       if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Could not save config.json");
     }
-  }
-  else if (strcmp(command, "userlist") == 0) {
-    int page = root["page"];
-    sendUserList(page, client);
   }
   else if (strcmp(command, "status") == 0) {
     toSendStatus = true;
@@ -2735,13 +2572,6 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
     if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] EVSE-WiFi runs in always active mode");
   }
 
-#if USE_RFID
-  if (config.getRfidActive() == true ) { //&& config.getEvseAlwaysActive(0) == false) {
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] Trying to setup RFID hardware");
-    rfid.begin(config.getRfidPin(), config.getRfidUsePN532(), config.getRfidGain(), &ntp, config.getSystemDebug(), &slog);
-  }
-#endif
-
   #ifdef ESP32
   oled.showSplash("Connecting WiFi...");
   #endif
@@ -2991,9 +2821,6 @@ void ICACHE_FLASH_ATTR setWebEvents() {
       }
       items["useMeter"] = config.getMeterActive(0);
 #endif
-#if USE_RFID
-      items["RFIDUID"] = lastRFIDUID;
-#endif
 
       remoteHeartbeatCounter = 0; // Reset Heartbeat Counter
 
@@ -3001,13 +2828,6 @@ void ICACHE_FLASH_ATTR setWebEvents() {
       request->send(response);
     });
 
-#if USE_RFID
-    //clearRfid
-    server.on("/clearRfid", HTTP_GET, [](AsyncWebServerRequest * request) {
-      lastRFIDUID = "";
-      request->send(200, "text/plain", "S0_RFIDUID cleared");
-    }); 
-#endif
 
     //getLog 
     server.on("/getLog", HTTP_GET, [](AsyncWebServerRequest * request) {

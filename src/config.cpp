@@ -78,14 +78,6 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::loadConfig(String givenConfig) {
     Serial.println("METER loaded");
 #endif
 
-#if USE_RFID
-    // rfidConfig
-    rfidConfig.userfid = jsonDoc["rfid"]["userfid"];
-    rfidConfig.sspin = jsonDoc["rfid"]["sspin"];
-    rfidConfig.rfidgain = jsonDoc["rfid"]["rfidgain"];
-    Serial.println("RFID loaded");
-#endif
-
     // ntpConfig
     ntpConfig.timezone = jsonDoc["ntp"]["timezone"];
     ntpConfig.ntpip = strdup(jsonDoc["ntp"]["ntpip"]);
@@ -279,13 +271,6 @@ bool ICACHE_FLASH_ATTR EvseWiFiConfig::printConfig() {
     Serial.println("factor: " + String(getMeterFactor(0)));
     Serial.println();
 #endif
-#if USE_RFID
-    Serial.println("// RFID Config");
-    Serial.println("userfid: " + String(getRfidActive()));
-    Serial.println("sspin: " + String(getRfidPin()));
-    Serial.println("rfidgain: " + String(getRfidGain()));
-    Serial.println();
-#endif
     Serial.println("// NTP Config");
     Serial.println("timezone: " + String(getNtpTimezone()));
     Serial.println("ntpip: " + String(getNtpIp()));
@@ -378,13 +363,6 @@ String ICACHE_FLASH_ATTR EvseWiFiConfig::getConfigJson() {
     }
     meterObject_0["meterphase"] = this->getMeterPhaseCount(0);
     meterObject_0["factor"] = this->getMeterFactor(0);
-#endif
-
-#if USE_RFID
-    JsonObject rfidItem = rootDoc.createNestedObject("rfid");
-    rfidItem["userfid"] = this->getRfidActive();
-    rfidItem["sspin"] = this->getRfidPin();
-    rfidItem["rfidgain"] = this->getRfidGain();
 #endif
 
     JsonObject ntpItem = rootDoc.createNestedObject("ntp");
@@ -631,29 +609,6 @@ uint8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterPhaseCount(uint8_t meterId) {
 uint8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getMeterFactor(uint8_t meterId) {
     if (meterConfig[meterId].factor) return meterConfig[meterId].factor;
     return 1;
-}
-#endif
-
-// rfidConfig getter/setter
-#if USE_RFID
-bool ICACHE_FLASH_ATTR EvseWiFiConfig::getRfidActive(){
-    return rfidConfig.userfid;
-}
-
-uint8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getRfidUsePN532() {
-    return false;
-}
-
-uint8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getRfidPin() {
-    if (rfidConfig.sspin) return rfidConfig.sspin;
-    #ifdef ESP8266
-    return D8;
-    #else
-    return 5;
-    #endif
-}
-int8_t ICACHE_FLASH_ATTR EvseWiFiConfig::getRfidGain() {
-    return rfidConfig.rfidgain;
 }
 #endif
 

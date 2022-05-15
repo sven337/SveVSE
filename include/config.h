@@ -128,14 +128,6 @@ public:
     bool mMeterTypeSDM630;
 #endif
 
-#if USE_RFID
-// rfidConfig
-    bool ICACHE_FLASH_ATTR getRfidActive();
-    uint8_t ICACHE_FLASH_ATTR getRfidPin();
-    uint8_t ICACHE_FLASH_ATTR getRfidUsePN532();
-    int8_t ICACHE_FLASH_ATTR getRfidGain();
-#endif
-
 // ntpConfig
     int8_t ICACHE_FLASH_ATTR getNtpTimezone();
     const char * ICACHE_FLASH_ATTR getNtpIp();
@@ -186,9 +178,6 @@ private:
     s_wifiConfig wifiConfig;
 #if USE_METER
     s_meterConfig meterConfig[1];
-#endif
-#if USE_RFID
-    s_rfidConfig rfidConfig;
 #endif
     s_ntpConfig ntpConfig;
     s_buttonConfig buttonConfig[1];
