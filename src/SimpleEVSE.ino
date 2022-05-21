@@ -152,7 +152,6 @@ bool toInitLog = false;
 bool toSendStatus = false;
 bool toSendSyslogToWs = false;
 bool toReboot = false;
-bool updateRunning = false;
 bool fsWorking = false;
 bool deactivatedByRemoteHeartbeat = false;
 
@@ -2317,51 +2316,6 @@ void ICACHE_FLASH_ATTR startWebserver() {
     request->send(response);
   });
 
-  // Simple Firmware Update Handler
-  server.on("/update", HTTP_POST, [](AsyncWebServerRequest * request) {
-    toReboot = !Update.hasError();
-    /*AsyncWebServerResponse *response = request->beginResponse(200, "text/plain", toReboot ? "OK" : "FAIL");
-    response->addHeader("Connection", "close");
-    request->send(response);*/
-    DynamicJsonDocument jsonDoc(500);
-    jsonDoc["command"] = "updateFinished";
-    jsonDoc["status"] = toReboot;
-    size_t len = measureJson(jsonDoc);
-    serializeJson(jsonDoc, Serial);
-    AsyncWebSocketMessageBuffer * buffer = ws.makeBuffer(len);
-    if (buffer) {
-      serializeJson(jsonDoc, (char *)buffer->get(), len + 1);
-      ws.textAll(buffer);
-    }
-
-  }, [](AsyncWebServerRequest * request, String filename, size_t index, uint8_t *data, size_t len, bool final) {
-    if (!index) {
-      if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ UPDT ] Firmware update started: ");
-      if(config.getSystemDebug()) slog.logln(filename.c_str());
-      updateRunning = true;
-      #ifdef ESP8266
-      Update.runAsync(true);
-      #endif
-      if (!Update.begin((ESP.getFreeSketchSpace() - 0x1000) & 0xFFFFF000)) {
-        Update.printError(Serial);
-      }
-    }
-    if (!Update.hasError()) {
-      if (Update.write(data, len) != len) {
-        Update.printError(Serial);
-      }
-    }
-    if (final) {
-      if (Update.end(true)) {
-        if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ UPDT ] Firmware update finished: ");
-        if(config.getSystemDebug()) slog.logln(String(index + len));
-        //if (config.getSystemDebug()) Serial.printf("[ UPDT ] Firmware update finished: %uB\n", index + len);
-      } else {
-        Update.printError(Serial);
-      }
-    }
-  });
-
   setWebEvents();
 
   // HTTP basic authentication
@@ -2511,21 +2465,21 @@ void IRAM_ATTR loop() {
     updateRemoteHeartbeat();
   }
 
-  if (toActivateEVSE && !updateRunning) {
+  if (toActivateEVSE) {
     activateEVSE();
     delay(300);
   }
-  if (toDeactivateEVSE && !updateRunning) {
+  if (toDeactivateEVSE) {
     deactivateEVSE(true);
     delay(300);
   }
   if (toInitLog) {
     if (initLogFile()) toInitLog = false;
   }
-  if (!updateRunning) { //Update Modbus data every 3000ms and send data to WebUI
-    updateEvseData();
-  }
-  if (toSetEVSEcurrent && millisUpdateEvse < millis() && !updateRunning) {
+  
+  updateEvseData();
+
+  if (toSetEVSEcurrent && millisUpdateEvse < millis()) {
     setEVSEcurrent();
   }
 
