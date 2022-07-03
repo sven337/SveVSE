@@ -1,11 +1,13 @@
-# SimpleEVSE-WiFi
+# SveVSE
+
+Based on SimpleEVSE-WiFi https://github.com/CurtRod/SimpleEVSE-WiFi
+
+Removed everything I don't need, added other things.
+
 
 💬 [German version](https://www.evse-wifi.de/dokumentation/)
 
 💾 [Latest Downloads, News and Changelogs (german)](https://www.evse-wifi.de/)
-
-## Attention:
-This file describes the structure of EVSE-WiFi in version 1.x.x and is only valid for the ESP8266. For the use of EVSE-WiFi 2.0 (based on ESP32) it is recommended to use the dedicated hardware 'EVSE-WiFi 2.0 Base'. You can find further information on www.evse-wifi.de. The EVSE-WiFi 2.0 Base Module can be bought [here](https://www.evse-wifi.de/produkt/evse-wifi-2-0-base/).
 
 ## Introduction
 
