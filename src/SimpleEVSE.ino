@@ -2459,6 +2459,8 @@ void ICACHE_FLASH_ATTR setup() {
   mqtt.subscribe(&mqtt_PAPP);
   mqtt.subscribe(&mqtt_ADPS);
 
+
+  config.printConfig();
 }
 
 void MQTT_connect() {
@@ -2513,9 +2515,6 @@ void IRAM_ATTR loop() {
     delay(100);
     ESP.restart();
   }
-/*  if (currentMillis >= rfid.cooldown && config.getRfidActive() == true && !updateRunning) {
-    rfidloop();
-  }*/
 
   handleLed();
 
@@ -2556,112 +2555,14 @@ void IRAM_ATTR loop() {
     wifiInterrupted = false;
   }
 
-  if (config.getButtonActive(0) && digitalRead(config.getButtonPin(0)) == HIGH && buttonState == LOW) {
-    delay(100);
-    if (digitalRead(config.getButtonPin(0)) == HIGH) {
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Button released");
-      buttonState = HIGH;
-      #ifdef ESP32
-      if (millisOnTimeOled < millis()) { // oLED is off
-        turnOnOled();
-      }
-      else {
-      #endif
-      if (!config.getEvseAlwaysActive(0)) {
-          if (evseActive) {
-            toDeactivateEVSE = true;
-          }
-          else {
-            toActivateEVSE = true;
-          }
-          lastUsername = "Button";
-          lastUID = "Button";
-        #ifdef ESP32
-        millisUpdateOled = millis() + 3000;
-        oled.showCheck(true, 1);
-        #endif
-      }
-      #ifdef ESP32
-      }
-      #endif
-    }
-  }
-
-  int buttonPin;
-  if (inFallbackMode) {
-    #ifdef ESP8266
-    buttonPin = D4;
-    #else
-    buttonPin = 16;
-    #endif
-  }
-  else {
-    buttonPin = config.getButtonPin(0);
-  }
-
-  if (digitalRead(buttonPin) != buttonState) {
-    delay(70);
-      if (digitalRead(buttonPin) != buttonState) {
-      buttonState = digitalRead(buttonPin);
-      buttonTimer = millis();
-      //turnOnOled();
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Button pressed...");
-    }
-  }
-  if (digitalRead(buttonPin) == LOW && (millis() - buttonTimer) > 10000 && buttonState == LOW) { //Reboot
-    delay(70);
-    if (digitalRead(buttonPin) == LOW) {
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Button Pressed > 10 sec -> Reboot");
-      toReboot = true;
-    }
-  }
   if (toSendStatus == true) {
     sendStatus();
     toSendStatus = false;
   }
 
-  if(millisCheckTimer < millis()) {
-    handleEVSETimer();
-  }
-
   if (toSendSyslogToWs) {
     sendSyslogToWs();
   }
-
-#ifndef ESP8266
-  oled.oledLoop();
-  if (millisUpdateOled < millis()) {
-    delay(5);
-    oled.showDemo(evseStatus, getChargingTime(), evseAmpsConfig, maxCurrent, currentKW, meteredKWh, ntp.getUtcTimeNow(), &swVersion, evseActive, timerActive);
-    millisUpdateOled = millis() + 3000;
-  }
-
-  if (millisOnTimeOled < millis() && oled.displayOn == true){
-    oled.turnOff();
-    //slog.logln(ntp.iso8601DateTime() + "[ OLED ] Display turned off"); ///DBG DBUG DEBUG
-  }
-
-  if (doCpInterruptCp) {
-    if (millis() > millisInterruptCp) {
-      doCpInterruptCp = false;
-      digitalWrite(config.getEvseCpIntPin(0), LOW);
-      slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Interrupt CP stopped");
-    }
-  }
-
-  if (config.getEvseRseActive(0)) {
-    if (digitalRead(config.getEvseRsePin(0)) == LOW && rseActive == false) {
-      slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] RSE Activate");
-      rseActive = true;
-      handleRse();
-    }
-    else if (digitalRead(config.getEvseRsePin(0)) == HIGH && rseActive == true) {
-      rseActive = false;
-      slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] RSE Deactivate");
-      handleRse();
-    }
-  }
-#endif
 
   mqtt.processPackets(100);
 }
