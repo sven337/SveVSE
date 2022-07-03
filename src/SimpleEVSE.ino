@@ -32,7 +32,6 @@
 #include "esp_log.h"
 #include "esp_spiffs.h"
 #include "esp_wifi.h"
-#include "oled.h"
 #endif
 
 #include <TimeLib.h>                  // Library for converting epochtime to a date
@@ -117,17 +116,8 @@ uint8_t currentBeforeRse = 0;
 //objects and instances
 #ifdef ESP8266
 SoftwareSerial SecondSer(D1, D2); //SoftwareSerial object (RX, TX)
-#else
-HardwareSerial FirstSer(1);
-HardwareSerial SecondSer(2);
-//oLED
-unsigned long millisUpdateOled = 0;
-U8G2_SSD1327_WS_128X128_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 12, /* dc=*/ 13, /* reset=*/ 33);
-//U8G2_SSD1309_128X64_NONAME0_F_4W_HW_SPI u8g2(U8G2_R0, /* cs=*/ 12, /* dc=*/ 13, /* reset=*/ 33);
-EvseWiFiOled oled;
 #endif
 
-unsigned long millisOnTimeOled = 0;
 
 ModbusMaster evseNode;
 AsyncWebServer server(80);    // Create AsyncWebServer instance on port "80"
@@ -318,37 +308,6 @@ void ICACHE_FLASH_ATTR timerDeactivateMatch() {
     timerActive = false;
   }
 }
-
-
-void ICACHE_FLASH_ATTR turnOnOled(uint32_t ontimesecs = config.getSystemOledOnTime()) {
-  #ifdef ESP32
-  millisOnTimeOled = millis() + ontimesecs * 1000; 
-  oled.turnOn();
-  //if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ oLED ] Display turned on");
-  #endif
-}
-
-#ifndef ESP8266
-void ICACHE_FLASH_ATTR handleRse() {
-  if (rseActive) { //RSE goes activated
-    toSetEVSEcurrent = true;
-    currentBeforeRse = evseAmpsConfig;
-    currentToSet = int(float(evseAmpsConfig) / 100.0 * float(config.getEvseRseValue(0)));
-    if (currentToSet > 0 && currentToSet < 6) currentToSet = 6;
-    if (config.getEvseRseValue(0) == 0) currentToSet = 0;
-    sliderStatus = false;
-    if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ SYSTEM ] RSE Interrupted! Setting current to ");
-    if(config.getSystemDebug()) slog.logln(currentToSet);
-  }
-  else { //RSE goes deactivated
-    toSetEVSEcurrent = true;
-    currentToSet = currentBeforeRse;
-    if (!config.getEvseRemote(0)) sliderStatus = true;
-    if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ SYSTEM ] RSE Released! Setting current back to ");
-    if(config.getSystemDebug()) slog.logln(currentToSet);
-  }
-}
-#endif
 
 uint16_t get16bitOfFloat32 (float float_number, uint8_t offset){
   union {
@@ -976,9 +935,6 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
       if (evseVehicleState == 2 ||
           evseVehicleState == 3 ||
           evseVehicleState == 4) {
-        if (evseStatus != 2){
-          turnOnOled();
-        }
         evseStatus = 2; //vehicle detected
         if (config.getEvseLedConfig(0) == 3) changeLedTimes(300, 2000);
       }
@@ -986,7 +942,6 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
         evseStatus = 1; // EVSE deactivated
       }
       if (vehicleCharging == true && manualStop == false) {   //vehicle interrupted charging
-        turnOnOled();
         stopChargingTimestamp = ntp.getUtcTimeNow();
         vehicleCharging = false;
         if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Vehicle interrupted charging");
@@ -997,15 +952,9 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
     }
 
     if (evseVehicleState == 1) {
-      if (evseStatus != 1){
-        turnOnOled();
-      } 
       evseStatus = 1;  // ready
     }
     else if (evseVehicleState == 2) {
-      if (evseStatus != 2){
-        turnOnOled();
-      } 
       evseStatus = 2; //vehicle detected
       if (config.getEvseLedConfig(0) == 3) changeLedTimes(300, 2000);
     }
@@ -1033,9 +982,6 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
         lastUsername = "vehicle";
         if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Vehicle interrupted charging");
       }
-      if (evseStatus != 1) {
-        turnOnOled();
-      }
       evseStatus = 1; // ready
       evseActive = true;
     }
@@ -1049,9 +995,6 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
           lastUsername = "vehicle";
           if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Vehicle interrupted charging");
         }
-        if (evseStatus != 2){
-          turnOnOled();
-        }
         evseStatus = 2; //vehicle detected
         evseActive = true;
         if (config.getEvseLedConfig(0) == 3) changeLedTimes(300, 2000);
@@ -1061,7 +1004,6 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
           if (!startup) {
             toActivateEVSE = true;
           }
-          turnOnOled();
           startChargingTimestamp = ntp.getUtcTimeNow();
           vehicleCharging = true;
           lastUID = "vehicle";
@@ -1077,9 +1019,6 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
       if (evseVehicleState == 2 ||
           evseVehicleState == 3 ||
           evseVehicleState == 4) {
-        if (evseStatus != 2){
-          turnOnOled();
-        }
         evseStatus = 2; //vehicle detected
         if (config.getEvseLedConfig(0) == 3) changeLedTimes(300, 2000);
         if (vehicleCharging && evseAmpsConfig == 0) { //Current Set to 0 - deactivate
@@ -1093,9 +1032,6 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
         }
       }
       else {
-        if (evseStatus != 1){
-          turnOnOled();
-        } 
         evseStatus = 1; // EVSE deactivated
       }
       if (vehicleCharging == true && manualStop == false) {   //vehicle interrupted charging
@@ -1198,7 +1134,6 @@ bool ICACHE_FLASH_ATTR activateEVSE() {
   }
   if (!config.getEvseAlwaysActive(0) && !timerActive) {   //Normal Mode
     static uint16_t iTransmit;
-    turnOnOled();
     if (evseEvseState == 3 &&
       evseVehicleState != 0) {    //no modbus error occured
       iTransmit = reg2005DefaultValues + 8192;         // disable EVSE after charge
@@ -1235,10 +1170,6 @@ bool ICACHE_FLASH_ATTR activateEVSE() {
   logLatest(lastUID, lastUsername);
   vehicleCharging = true;
 
-  #ifndef ESP8266
-  //millisUpdateOled = millis() + 3000;
-  //oled.showCheck(false);
-  #endif
   sendEVSEdata();
   return true;
 }
@@ -1248,7 +1179,6 @@ bool ICACHE_FLASH_ATTR deactivateEVSE(bool logUpdate) {
     slog.logln(ntp.iso8601DateTime() + "[ ERR ] No EVSE detected!");
     return false;
   }
-  turnOnOled();
   if (!config.getEvseAlwaysActive(0) && !timerActive) {   //Normal Mode
     //New ModBus Master Library
     static uint16_t iTransmit = reg2005DefaultValues + 16384;  // deactivate evse
@@ -1308,10 +1238,8 @@ bool ICACHE_FLASH_ATTR setEVSEcurrent() {  // telegram 1: write EVSE current
   if (config.getEvseRemote(0)) {
     toSetEVSEcurrent = false;
     if (currentToSet == evseAmpsConfig) return true; // no oLED action
-    turnOnOled(5);
   }
   else {
-    turnOnOled();
     toSetEVSEcurrent = false;
     if (currentToSet == evseAmpsConfig) return true; // oLED action but register is already set
   }
@@ -1799,9 +1727,6 @@ bool checkUart(HardwareSerial* Ser, uint8_t deviceId) {
 
 bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
   slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Loading Config File on Startup...");
-  #ifdef ESP32
-  oled.showSplash("Config File...");
-  #endif
   if (configString == "") {
     if (!config.loadConfig()) return false;
   }
@@ -1809,9 +1734,6 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
     if (!config.loadConfig(configString)) return false;
   }
   config.loadConfiguration();
-  #ifdef ESP32
-  oled.setLanguage(&config);
-  #endif
   
   slog.begin(&ws, config.getSystemDebug(), &syslogDeque);
 
@@ -1862,9 +1784,6 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
   server.addHandler(new SPIFFSEditor(SPIFFS, "admin", config.getSystemPass()));
   #endif
 
-  #ifdef ESP32
-  oled.showSplash("EVSE Controller...");
-  #endif
 
   queryEVSE(true);
   while (evseErrorCount != 0) {
@@ -1904,9 +1823,6 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
     if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] EVSE-WiFi runs in always active mode");
   }
 
-  #ifdef ESP32
-  oled.showSplash("Connecting WiFi...");
-  #endif
   if (config.getWifiWmode() == 1) {
     if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] EVSE-WiFi is running in AP Mode ");
     WiFi.disconnect(true);
@@ -2366,24 +2282,7 @@ void ICACHE_FLASH_ATTR setup() {
   SPI.begin();
   SPIFFS.begin();
 
-  #ifdef ESP32
-  oled.begin(&u8g2, config.getEvseDisplayRotation(0));
-  slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] OLED started");
-  turnOnOled(config.getSystemOledOnTime());
-  oled.showSplash();
-  #endif
-
   if (!loadConfiguration()) {
-    #ifdef ESP32
-    oled.showSplash("WARNING!");
-    delay(500);
-    oled.showSplash("Fallback Mode!");
-    delay(500);
-    oled.showSplash("WARNING!");
-    delay(500);
-    oled.showSplash("Fallback Mode!");
-    delay(2000);
-    #endif
     slog.logln("[ WARNING ] Going to fallback mode!");
     fallbacktoAPMode();
   }
@@ -2404,18 +2303,12 @@ void ICACHE_FLASH_ATTR setup() {
   if (digitalRead(config.getButtonPin(0)) == LOW) {
     pinMode(config.getEvseLedPin(0), OUTPUT);
     if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Button Pressed while boot!");
-    #ifdef ESP32
-    oled.showSplash("FactoryReset in 20s");
-    #endif
     digitalWrite(config.getEvseLedPin(0), HIGH);
     unsigned long millisBefore = millis();
     int button = config.getButtonPin(0);
     while (digitalRead(button) == LOW) {  
       if (millis() > (millisBefore + 20000)) {
         factoryReset();
-        #ifdef ESP32
-        oled.showSplash(ntp.iso8601DateTime() + "[ SYSTEM ] Factory Reset done!");
-        #endif
         slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] System has been reset to factory settings!");
         digitalWrite(config.getEvseLedPin(0), LOW);
       }
@@ -2424,34 +2317,12 @@ void ICACHE_FLASH_ATTR setup() {
     }
   }
 
-#ifndef ESP8266
-  pinMode(config.getEvseRsePin(0), INPUT_PULLUP);
-  if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ SYSTEM ] Use RSE GPIO ");
-  if(config.getSystemDebug()) slog.logln(config.getEvseRsePin(0));
-  pinMode(config.getEvseCpIntPin(0), OUTPUT);
-  delay(100);
-#endif
   now();
-  #ifdef ESP32
-  oled.showSplash("Starting webserver...");
-  #endif
   startWebserver();
   if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] End of setup routine");
   if (config.getEvseRemote(0)) sliderStatus = false;
 
   MDNS.addService("http", "tcp", 80);
-  #ifdef ESP32
- // Show IP Address on oLED
-  String ip = "IP: ";
-  if (config.getWifiWmode() == 1) {
-    ip += WiFi.softAPIP().toString();
-  }
-  else {
-    ip += WiFi.localIP().toString();
-  }
-  oled.showSplash(ip);
-  millisUpdateOled = millis() + 6000;
-  #endif
 
   mqtt_PAPP.setCallback(PAPP_callback);
   mqtt_ADPS.setCallback(ADPS_callback);
@@ -2510,6 +2381,7 @@ void IRAM_ATTR loop() {
       toReboot = true;
     }
   }
+
   if (toReboot) {
     if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ UPDT ] Rebooting...");
     delay(100);
