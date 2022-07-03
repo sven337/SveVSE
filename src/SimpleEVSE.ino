@@ -160,7 +160,6 @@ bool isWifiConnected = false;
 String lastUsername = "";
 String lastUID = "";
 char * deviceHostname = NULL;
-uint8_t maxCurrent = 0;
 Syslog slog;
 
 //Others
@@ -795,14 +794,6 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
     }
   }
 
-  // Maximum slider value is independant of PP Limit - to activate PP-Limit for slider's max value uncomment here:
-  //if (evseAmpsPP > config.getSystemMaxInstall()) {
-    maxCurrent = config.getSystemMaxInstall();
-  //}
-  //else {
-  //  maxCurrent = evseAmpsPP;
-  //}
-  
   // Globals
   if (evseFirmware > 17) {
     if (reg2005DefaultValues != 672) {
@@ -1799,7 +1790,8 @@ void ICACHE_FLASH_ATTR setWebEvents() {
       JsonObject items = list.createNestedObject();
       items["vehicleState"] = evseStatus;
       items["evseState"] = evseActive;
-      items["maxCurrent"] = maxCurrent;
+      items["maxCurrent"] = config.getSystemMaxInstall();
+
       if (highResolution) {
         items["actualCurrent"] = evseAmpsConfig / 100;
         items["actualCurrentMA"] = evseAmpsConfig;
