@@ -14,7 +14,6 @@
 #include <Arduino.h>
 #include "features.h"
 
-#ifdef ESP8266
 #include <ESP8266WiFi.h>              // Whole thing is about using Wi-Fi networks
 #include <ESP8266mDNS.h>              // Zero-config Library (Bonjour, Avahi)
 #include <ESPAsyncTCP.h>              // Async TCP Library is mandatory for Async Web Server
@@ -22,17 +21,6 @@
 #include <WiFiUdp.h>                  // Library for manipulating UDP packets which is used by NTP Client to get Timestamps
 #include <SoftwareSerial.h>           // Using GPIOs for Serial Modbus communication
 
-#else
-#include <WiFi.h>
-#include <ESPmDNS.h>
-#include <SPIFFS.h>
-#include <HardwareSerial.h>
-#include "Update.h"
-#include "esp_err.h"
-#include "esp_log.h"
-#include "esp_spiffs.h"
-#include "esp_wifi.h"
-#endif
 
 #include <TimeLib.h>                  // Library for converting epochtime to a date
 #include <SPI.h>                      // SPI protocol
@@ -69,9 +57,6 @@ uint8_t sw_rev = 0; //Firmware Revision
 String sw_add = "";
 
 #ifdef ESP8266
-uint8_t sw_maj = 1; //Firmware Major Version
-String swVersion = String(sw_maj) + "." + String(sw_min) + "." + String(sw_rev) + sw_add;
-#else
 uint8_t sw_maj = 2; //Firmware Major Version
 String swVersion = String(sw_maj) + "." + String(sw_min) + "." + String(sw_rev) + sw_add;
 #endif
@@ -99,7 +84,6 @@ AsyncWebParameter* awp2;
 const char * initLog = "{\"type\":\"latestlog\",\"list\":[]}";
 bool sliderStatus = true;
 uint8_t evseErrorCount = 0;
-bool doCpInterruptCp = false;
 bool update1000 = true;
 bool update2000 = true;
 unsigned long updateInterval = 2000;
@@ -107,16 +91,9 @@ bool updateHelper1000 = false;
 uint32_t mbErrCount = 0;
 uint32_t mbReadCount = 0;
 
-#ifndef ESP8266
-unsigned long millisInterruptCp = 0;
-bool rseActive = false;
-uint8_t currentBeforeRse = 0;
-#endif
 
 //objects and instances
-#ifdef ESP8266
 SoftwareSerial SecondSer(D1, D2); //SoftwareSerial object (RX, TX)
-#endif
 
 
 ModbusMaster evseNode;
@@ -361,26 +338,6 @@ String ICACHE_FLASH_ATTR printIP(IPAddress address) {
 }
 
 
-#ifndef ESP8266
-String ICACHE_FLASH_ATTR printSubnet(uint8_t mask) {
-  String ret = "";
-  while (mask >= 8) {
-    if (mask >= 8) {
-      ret += "255.";
-      mask -= 8;
-    }
-  }
-  if (mask == 0) {
-    ret += "0";
-  }
-  else {
-    int lastOct = 8 * mask;
-    ret += (String)lastOct;
-  }
-  if (ret.substring(ret.length() - 1) == ".") ret.remove(ret.length() - 1);
-  return ret;
-}
-#endif
 
 
 unsigned long ICACHE_FLASH_ATTR getChargingTime() {
@@ -398,19 +355,11 @@ unsigned long ICACHE_FLASH_ATTR getChargingTime() {
 }
 
 bool ICACHE_FLASH_ATTR resetUserData() {
-  #ifdef ESP8266
   Dir userdir = SPIFFS.openDir("/P/");
   while(userdir.next()){
     slog.logln(userdir.fileName());
     SPIFFS.remove(userdir.fileName());
   }
-  #else
-  File userdir = SPIFFS.open("/P/");
-  while(userdir.openNextFile()){
-    slog.logln(userdir.name());
-    SPIFFS.remove(userdir.name());
-  }
-  #endif
   delay(10);
   return true;
 }
@@ -443,23 +392,9 @@ bool ICACHE_FLASH_ATTR reconnectWiFi() {
 //////////////////////////////////////////////////////////////////////////////////////////
 void ICACHE_FLASH_ATTR sendStatus() {
   fsWorking = true;
-  #ifdef ESP8266
   struct ip_info info;
   FSInfo fsinfo;
   if (!SPIFFS.info(fsinfo)) {
-  #else
-  size_t total = 0, used = 0;
-  esp_err_t spiffsret = esp_spiffs_info(NULL, &total, &used);
-  if (spiffsret == ESP_OK) {
-    total = SPIFFS.totalBytes();
-    used = SPIFFS.usedBytes();
-    if (total != 0 || used != 0) {
-      slog.logln(ntp.iso8601DateTime() + "[ FILE SYSTEM ] Got SPIFFS data successfully");
-      spiffsret = ESP_OK;
-    }
-  }
-  else {
-  #endif
     slog.log(ntp.iso8601DateTime() + "[ WARN ] Error getting info on SPIFFS, trying another way");
   }
   delay(10);
@@ -478,11 +413,6 @@ void ICACHE_FLASH_ATTR sendStatus() {
   jsonDoc["availspiffs"] = fsinfo.totalBytes - fsinfo.usedBytes;
   jsonDoc["spiffssize"] = fsinfo.totalBytes;
   jsonDoc["hardwarerev"] = "ESP8266";
-  #else
-  jsonDoc["chipid"] = String((uint16_t)(ESP.getEfuseMac()>>32) + (uint32_t)ESP.getEfuseMac(), HEX);
-  jsonDoc["availspiffs"] = total - used;
-  jsonDoc["spiffssize"] = total;
-  jsonDoc["hardwarerev"] = "ESP32";
   #endif
 
 
@@ -512,32 +442,6 @@ void ICACHE_FLASH_ATTR sendStatus() {
   jsonDoc["netmask"] = printIP(nmaddr);
   jsonDoc["hostname"] = wifi_station_get_hostname();
 
-  #else
-  wifi_config_t conf;
-  tcpip_adapter_ip_info_t info;
-  tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_ETH, &info);
-  IPAddress ipaddr;
-  IPAddress nmaddr;
-  if (inAPMode) {
-    esp_wifi_get_config(WIFI_IF_AP, &conf);
-    jsonDoc["ssid"] = String(reinterpret_cast<char*>(conf.ap.ssid));
-    jsonDoc["dns"] = printIP(WiFi.softAPIP());
-    jsonDoc["mac"] = WiFi.softAPmacAddress();
-    jsonDoc["ip"] = WiFi.softAPIP().toString();
-    jsonDoc["netmask"] = printSubnet(WiFi.softAPSubnetCIDR());
-  }
-  else {
-    esp_wifi_get_config(WIFI_IF_STA, &conf);
-    jsonDoc["ssid"] = String(reinterpret_cast<char*>(conf.sta.ssid));
-    jsonDoc["rssi"] = String(WiFi.RSSI());
-    jsonDoc["dns"] = printIP(WiFi.dnsIP());
-    jsonDoc["mac"] = WiFi.macAddress();
-    jsonDoc["ip"] = WiFi.localIP().toString();
-    jsonDoc["netmask"] = WiFi.subnetMask().toString();
-  }
-  IPAddress gwaddr = WiFi.gatewayIP();
-  jsonDoc["hostname"] = WiFi.getHostname();
-  //jsonDoc["int_temp"] = String(((temprature_sens_read() - 32) / 1.8), 2);
   #endif
 
   jsonDoc["gateway"] = printIP(gwaddr);
@@ -618,11 +522,7 @@ void ICACHE_FLASH_ATTR logLatest(String uid, String username) {
     size_t size = logFile.size();
     std::unique_ptr<char[]> buf (new char[size]);
     logFile.readBytes(buf.get(), size);
-    #ifndef ESP8266
-    DynamicJsonDocument jsonDoc2(17408);
-    #else
     DynamicJsonDocument jsonDoc2(8704);
-    #endif
     DeserializationError error = deserializeJson(jsonDoc2, buf.get());
     JsonArray list = jsonDoc2["list"];
     if (error) {
@@ -630,11 +530,7 @@ void ICACHE_FLASH_ATTR logLatest(String uid, String username) {
     }
     else {
       logFile.close();
-      #ifndef ESP8266
-      if (list.size() >= 100) {
-      #else
       if (list.size() >= 50) {
-      #endif
         list.remove(0);
       }
       logFile = SPIFFS.open("/latestlog.json", "w");
@@ -692,11 +588,7 @@ void ICACHE_FLASH_ATTR readLogAtStartup() {
   size_t size = logFile.size();
   std::unique_ptr<char[]> buf (new char[size]);
   logFile.readBytes(buf.get(), size);
-  #ifndef ESP8266
-  DynamicJsonDocument jsonDoc(15000);
-  #else
   DynamicJsonDocument jsonDoc(6500);
-  #endif
   DeserializationError error = deserializeJson(jsonDoc, buf.get());
   JsonArray list = jsonDoc["list"];
   if (error) {
@@ -727,11 +619,7 @@ void ICACHE_FLASH_ATTR updateLog(bool incomplete) {
   size_t size = logFile.size();
   std::unique_ptr<char[]> buf (new char[size]);
   logFile.readBytes(buf.get(), size);
-  #ifndef ESP8266
-  DynamicJsonDocument jsonDoc(15000);
-  #else
   DynamicJsonDocument jsonDoc(6500);
-  #endif
   DeserializationError error = deserializeJson(jsonDoc, buf.get());
   JsonArray list = jsonDoc["list"];
   if (error) {
@@ -1309,10 +1197,6 @@ void ICACHE_FLASH_ATTR sendEVSEdata() {
       jsonDoc["evse_current_limit"] = evseAmpsConfig;
     }
     jsonDoc["evse_slider_status"] = sliderStatus;
-    #ifndef ESP8266
-    jsonDoc["evse_rse_status"] = rseActive;
-    jsonDoc["evse_rse_current_before"] = currentBeforeRse;
-    #endif
     jsonDoc["evse_rse_value"] = config.getEvseRseValue(0);
     if (getChargingTime() > 360000000) {
       jsonDoc["evse_charging_time"] = 0;
@@ -1363,9 +1247,6 @@ void ICACHE_FLASH_ATTR sendStartupInfo(AsyncWebSocketClient * client) {
   #ifdef ESP8266
   hwrev = "ESP8266";
   //String message = "{\"command\":\"startupinfo\",\"hw_rev\":\"ESP8266\",\"sw_rev\":\"" + swVersion + "\",\"pp_limit\":\"" +  + "\",\"language\":\"" + config.getSystemLanguage() + "\",\"opmode\":" + opmode + ",\"highResolution\":\"" + highResolution + "\"}"; 
-  #else
-  hwrev = "ESP32";
-  //String message = "{\"command\":\"startupinfo\",\"hw_rev\":\"ESP32\",\"sw_rev\":\"" + swVersion + "\",\"pp_limit\":\"" + (String)evseAmpsPP + "\",\"language\":\"" + config.getSystemLanguage() + "\",\"opmode\":" + opmode + ",\"highResolution\":\"" + highResolution + "\"}";      
   #endif
 
   StaticJsonDocument<500> jsonDoc;
@@ -1395,16 +1276,6 @@ void ICACHE_FLASH_ATTR sendEvseTimer(AsyncWebSocketClient * client) {
   timerFile.close();
   client->text(file);
 }
-
-#ifndef ESP8266
-bool ICACHE_FLASH_ATTR interruptCp() {
-  digitalWrite(config.getEvseCpIntPin(0), HIGH);
-  millisInterruptCp = millis() + 3000;
-  doCpInterruptCp = true;
-  slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Interrupt CP started");
-  return true;
-}
-#endif
 
 void ICACHE_FLASH_ATTR onWsEvent(AsyncWebSocket * server, AsyncWebSocketClient * client, AwsEventType type, void * arg, uint8_t *data, size_t len) {
   if (type == WS_EVT_ERROR) {
@@ -1489,8 +1360,6 @@ void ICACHE_FLASH_ATTR processWsEvent(JsonDocument& root, AsyncWebSocketClient *
       }
       #ifdef ESP8266
       ESP.reset();
-      #else
-      ESP.restart();
       #endif
     }
     else {
@@ -1616,12 +1485,6 @@ void ICACHE_FLASH_ATTR processWsEvent(JsonDocument& root, AsyncWebSocketClient *
     toSendSyslogToWs = true;
   }
 
-  #ifndef ESP8266
-  else if (strcmp(command, "interruptcp") == 0) {
-    if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ SYSTEM ] Websocket Command \"interruptcp\"...");
-    interruptCp();
-  }
-  #endif
   msg = "";
 }
 
@@ -1688,42 +1551,6 @@ bool ICACHE_FLASH_ATTR startAP(const char * ssid, const char * password = NULL) 
 
   return success;
 }
-
-#ifdef ESP32
-bool checkUart(HardwareSerial* Ser, uint8_t deviceId) {
-  // Device IDs:
-  // 1 -> EVSE
-  // 2 -> SDM
-  ModbusMaster testNode;
-  testNode.begin(deviceId, *Ser);
-  testNode.clearTransmitBuffer();
-  testNode.clearResponseBuffer();
-  
-  uint8_t result = 0;
-
-  int i = 0;
-  do {
-    if (deviceId == 1) result = testNode.readHoldingRegisters(0x03E8, 2);  // read 1 registers starting at 0x03E8 (1000)
-    if (deviceId == 2) result = testNode.readHoldingRegisters(0x0156, 2);  // read 1 registers starting at 0x0156 (342)
-    testNode.clearTransmitBuffer();
-    testNode.clearResponseBuffer();
-    if (result != 0) {
-      slog.log(ntp.iso8601DateTime() + "[ checkUart ] Error on getting data from device ");
-      slog.logln(deviceId);
-      delay(300);
-
-    } 
-    i++;
-  } while (result != 0 && i < 3);
-
-  if (result == 0) {
-    return true;
-  }
-  else {
-    return false;
-  }
-}
-#endif
 
 bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
   slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Loading Config File on Startup...");
@@ -1844,17 +1671,8 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
 
     WiFi.config(clientip, gateway, subnet, dns);
   }
-  else {
-    #ifdef ESP32
-    WiFi.config(INADDR_NONE, INADDR_NONE, INADDR_NONE);
-    #endif
-  }
 
-  #ifdef ESP32
-  WiFi.setHostname(config.getSystemHostname());
-  #else
   WiFi.hostname(config.getSystemHostname());
-  #endif
 
   if (!connectSTA(config.getWifiSsid(), config.getWifiPass())) {
     return false;
@@ -2080,18 +1898,6 @@ void ICACHE_FLASH_ATTR setWebEvents() {
       }
     });
 
-    //interruptCp
-    #ifndef ESP8266
-    server.on("/interruptCp", HTTP_GET, [](AsyncWebServerRequest * request) {
-      if (interruptCp()) {
-        request->send(200, "text/plain", "S0_CP signal interrupted successfully");
-      }
-      else {
-        request->send(200, "text/plain", "E0_Error while interrupting CP signal");
-      }
-    });
-    #endif
-
     //doReboot
     server.on("/doReboot", HTTP_GET, [](AsyncWebServerRequest * request) {
       awp = request->getParam(0);
@@ -2182,29 +1988,6 @@ void ICACHE_FLASH_ATTR setWebEvents() {
         item["dns"] = printIP(WiFi.dnsIP());
         item["mac"] = WiFi.macAddress();
       }
-      #else
-      wifi_config_t conf;
-      tcpip_adapter_ip_info_t info;
-      tcpip_adapter_get_ip_info(TCPIP_ADAPTER_IF_ETH, &info);
-      if (inAPMode) {
-        esp_wifi_get_config(WIFI_IF_AP, &conf);
-        item["ssid"] = String(reinterpret_cast<char*>(conf.ap.ssid));
-        item["dns"] = printIP(WiFi.softAPIP());
-        item["mac"] = WiFi.softAPmacAddress();
-        item["ip"] = WiFi.softAPIP().toString();
-        item["netmask"] = printSubnet(WiFi.softAPSubnetCIDR());
-        item["gateway"] = WiFi.gatewayIP().toString();
-      }
-      else {
-        esp_wifi_get_config(WIFI_IF_STA, &conf);
-        item["ssid"] = String(reinterpret_cast<char*>(conf.sta.ssid));
-        item["rssi"] = String(WiFi.RSSI());
-        item["dns"] = printIP(WiFi.dnsIP());
-        item["mac"] = WiFi.macAddress();
-        item["ip"] = WiFi.localIP().toString();
-        item["netmask"] = WiFi.subnetMask().toString();
-        item["gateway"] = WiFi.gatewayIP().toString();
-      } 
       #endif
       item["uptime"] = ntp.getUptimeSec();
       if (config.getEvseRemote(0)) {
