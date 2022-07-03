@@ -1029,14 +1029,9 @@ bool ICACHE_FLASH_ATTR setEVSEcurrent() {  // telegram 1: write EVSE current
   }
 
   if (setEVSERegister(1000,currentToSet) == false) {
-    // error occured
-    //slog.logln(ntp.iso8601DateTime() + "[ ModBus ] Error occured while setting current in EVSE - trying again in a few seconds...");
     return false;
   }
   else {
-    // register successfully written
-    //if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ ModBus ] Register 1000 successfully set to ");
-    //if(config.getSystemDebug()) slog.logln(currentToSet);
     evseAmpsConfig = currentToSet;  //foce update in WebUI
     sendEVSEdata();               //foce update in WebUI
     toSetEVSEcurrent = false;
