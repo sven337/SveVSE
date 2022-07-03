@@ -44,6 +44,11 @@
 #include <ModbusMaster.h>
 #include <ModbusIP_ESP8266.h>
 
+#include "mqtt_params.h"
+#include <ESP8266WiFi.h>
+#include "Adafruit_MQTT.h"
+#include "Adafruit_MQTT_Client.h"
+
 #include <string>
 #include <deque>
 #include "proto.h"
@@ -53,6 +58,12 @@
 #include "config.h"
 #include "templates.h"
 
+WiFiClient client;
+
+Adafruit_MQTT_Client mqtt(&client, MQTT_SERVER, MQTT_SERVER_PORT, MQTT_USER, MQTT_PASSWORD);
+
+Adafruit_MQTT_Subscribe mqtt_PAPP = Adafruit_MQTT_Subscribe(&mqtt, "edf/PAPP");
+Adafruit_MQTT_Subscribe mqtt_ADPS = Adafruit_MQTT_Subscribe(&mqtt, "edf/ADPS");
 
 uint8_t sw_min = 3; //Firmware Minor Version
 uint8_t sw_rev = 0; //Firmware Revision
@@ -2330,6 +2341,18 @@ void ICACHE_FLASH_ATTR startWebserver() {
   server.begin();
 }
 
+void PAPP_callback(uint32_t papp)
+{
+    slog.logln("Got papp" + papp);
+    Serial.print("Got PAPP "); 
+    Serial.println(papp);
+}
+
+void ADPS_callback(uint32_t adps)
+{
+    slog.logln("Got adps" + adps);
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////
 ///////       Setup
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -2429,6 +2452,38 @@ void ICACHE_FLASH_ATTR setup() {
   oled.showSplash(ip);
   millisUpdateOled = millis() + 6000;
   #endif
+
+  mqtt_PAPP.setCallback(PAPP_callback);
+  mqtt_ADPS.setCallback(ADPS_callback);
+
+  mqtt.subscribe(&mqtt_PAPP);
+  mqtt.subscribe(&mqtt_ADPS);
+
+}
+
+void MQTT_connect() {
+  int8_t ret;
+
+  // Stop if already connected.
+  if (mqtt.connected()) {
+    return;
+  }
+
+  Serial.print("Connecting to MQTT... ");
+
+  uint8_t retries = 3;
+  while ((ret = mqtt.connect()) != 0) { // connect will return 0 for connected
+       Serial.println(mqtt.connectErrorString(ret));
+       Serial.println("Retrying MQTT connection in 1 second...");
+       mqtt.disconnect();
+       delay(1000);  // wait 1 second
+       retries--;
+       if (retries == 0) {
+           // XXX report MQTT failure
+           return;
+       }
+  }
+  Serial.println("MQTT Connected!");
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -2439,6 +2494,9 @@ void IRAM_ATTR loop() {
   unsigned long uptime = ntp.getUptimeSec();
   previousLoopMillis = currentMillis;
   changeLedStatus();
+
+  // Ensure MQTT is connected
+  MQTT_connect(); 
 
   //Reboot after 10 minutes in Fallback
   if (inFallbackMode && millis() > 600000) toReboot = true;
@@ -2604,4 +2662,6 @@ void IRAM_ATTR loop() {
     }
   }
 #endif
+
+  mqtt.processPackets(100);
 }
