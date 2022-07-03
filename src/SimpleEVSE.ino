@@ -1998,8 +1998,6 @@ void ICACHE_FLASH_ATTR setup() {
 
   now();
   startWebserver();
-  if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] End of setup routine");
-  if (config.getEvseRemote(0)) sliderStatus = false;
 
   MDNS.addService("http", "tcp", 80);
 
@@ -2011,6 +2009,9 @@ void ICACHE_FLASH_ATTR setup() {
 
 
   config.printConfig();
+  
+  if (config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] End of setup routine");
+  if (config.getEvseRemote(0)) sliderStatus = false;
 }
 
 void MQTT_connect() {
