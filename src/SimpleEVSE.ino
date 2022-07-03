@@ -52,6 +52,12 @@ Adafruit_MQTT_Client mqtt(&client, MQTT_SERVER, MQTT_SERVER_PORT, MQTT_USER, MQT
 Adafruit_MQTT_Subscribe mqtt_PAPP = Adafruit_MQTT_Subscribe(&mqtt, "edf/PAPP");
 Adafruit_MQTT_Subscribe mqtt_ADPS = Adafruit_MQTT_Subscribe(&mqtt, "edf/ADPS");
 
+#define PAPP_SUBSCRIBED 6000
+#define PAPP_MARGIN 1000
+uint16_t PAPP_now = 0;
+bool PAPP_updated = false;
+uint32_t ADPS_stop_until = 0;
+
 uint8_t sw_min = 3; //Firmware Minor Version
 uint8_t sw_rev = 0; //Firmware Revision
 String sw_add = "";
@@ -2042,13 +2048,17 @@ void ICACHE_FLASH_ATTR startWebserver() {
 
 void PAPP_callback(uint32_t papp)
 {
-    slog.logln("Got papp" + papp);
+    PAPP_now = papp;
+    PAPP_updated = true;
     Serial.print("Got PAPP "); 
     Serial.println(papp);
 }
 
 void ADPS_callback(uint32_t adps)
 {
+    // ADPS ? Stop charging for ADPS_STOP_DURATION seconds
+#define ADPS_STOP_DURATION 60
+    ADPS_stop_until = millis() + ADPS_STOP_DURATION * 1000; 
     slog.logln("Got adps" + adps);
 }
 
@@ -2142,6 +2152,56 @@ void MQTT_connect() {
   Serial.println("MQTT Connected!");
 }
 
+static void update_maximum_current()
+{
+    // Handle ADPS which overrides everything
+    if (millis() < ADPS_stop_until) {
+        Serial.print("ADPS -> stopping charge for next seconds: "); Serial.println((ADPS_stop_until - millis()) / 1000);
+        currentToSet = 0;
+        setEVSEcurrent();
+        return;
+    }
+
+    // Handle PAPP : always leave PAPP_MARGIN VA of room in power consumption
+    if (!PAPP_updated) {
+        return;
+    }
+
+    PAPP_updated = false;
+
+    // Update maximum current value based on current house power consumption
+    uint16_t max_current = 12 * 100;  // Maximum of 12A no matter what
+    int32_t current_PAPP_headroom = PAPP_SUBSCRIBED - PAPP_now;
+    if (current_PAPP_headroom < 0) current_PAPP_headroom = 0; // should be ADPS also...
+
+    if (current_PAPP_headroom < PAPP_MARGIN) {
+        Serial.print("current PAPP headroom is "); Serial.print(current_PAPP_headroom); Serial.println(" lower than margin, reducing current");
+        uint32_t reduce_current_by = 100 * (PAPP_MARGIN - current_PAPP_headroom) / 230;
+        Serial.print("evseAmpsConfig is "); Serial.print(evseAmpsConfig); Serial.print(" must reduce by "); Serial.println(reduce_current_by);
+        if (evseAmpsConfig < reduce_current_by) {
+            max_current = 0;
+        } else {
+            max_current = evseAmpsConfig - reduce_current_by;
+        }
+    }
+
+    // Sanity checks
+    if (max_current > 12 * 100)
+        max_current = 12 * 100;
+
+    if (max_current <= 64) {
+        // This will be read as a low-resolution setting: set 0 instead
+        max_current = 0;
+    }
+
+    // Update EVSE current if need be
+    if (max_current != currentToSet) {
+        Serial.print("Setting new current: "); Serial.println(max_current);
+        currentToSet = max_current;
+        toSetEVSEcurrent = true;
+    }
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////
 ///////       Loop
 //////////////////////////////////////////////////////////////////////////////////////////
@@ -2220,4 +2280,6 @@ void IRAM_ATTR loop() {
   }
 
   mqtt.processPackets(100);
+
+  update_maximum_current();
 }
