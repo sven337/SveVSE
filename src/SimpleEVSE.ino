@@ -370,11 +370,11 @@ bool ICACHE_FLASH_ATTR resetUserData() {
 }
 
 bool ICACHE_FLASH_ATTR factoryReset() {
-  if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Factory Reset...");
+  if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Factory Reset...");
   SPIFFS.remove("/config.json");
   initLogFile();
   if (resetUserData()) {
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] ...successfully done - going to reboot");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] ...successfully done - going to reboot");
   }
   toReboot = true;
   delay(100);
@@ -387,7 +387,7 @@ bool ICACHE_FLASH_ATTR reconnectWiFi() {
   delay(100);
   WiFi.mode(WIFI_STA);
   WiFi.begin(config.getWifiSsid(), config.getWifiPass(), 0);
-  if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ INFO ] Trying to reconnect WiFi without given BSSID: ");
+  if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[Info] Trying to reconnect WiFi without given BSSID: ");
   if(config.getSystemDebug()) slog.logln(config.getWifiSsid());
   return true;
 }
@@ -531,7 +531,7 @@ void ICACHE_FLASH_ATTR logLatest(String uid, String username) {
     DeserializationError error = deserializeJson(jsonDoc2, buf.get());
     JsonArray list = jsonDoc2["list"];
     if (error) {
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Impossible to read log file");
+      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Impossible to read log file");
     }
     else {
       logFile.close();
@@ -579,7 +579,7 @@ void ICACHE_FLASH_ATTR logLatest(String uid, String username) {
     logFile.close();
   }
   else {
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Cannot create Logfile");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Cannot create Logfile");
   }
   //SPIFFS.end();
   delay(100);
@@ -598,8 +598,8 @@ void ICACHE_FLASH_ATTR readLogAtStartup() {
   JsonArray list = jsonDoc["list"];
   if (error) {
     logFile.close();
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Impossible to read log file");
-    slog.log(ntp.iso8601DateTime() + "[ SYSTEM ] Impossible to parse Log file: ");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Impossible to read log file");
+    slog.log(ntp.iso8601DateTime() + "[System] Impossible to parse Log file: ");
     slog.logln(error.c_str());
   }
   else {
@@ -629,8 +629,8 @@ void ICACHE_FLASH_ATTR updateLog(bool incomplete) {
   JsonArray list = jsonDoc["list"];
   if (error) {
     logFile.close();
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Impossible to update log file");
-    slog.log(ntp.iso8601DateTime() + "[ SYSTEM ] Impossible to parse Log file: ");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Impossible to update log file");
+    slog.log(ntp.iso8601DateTime() + "[System] Impossible to parse Log file: ");
     slog.logln(error.c_str());
   }
   else {
@@ -680,7 +680,7 @@ void ICACHE_FLASH_ATTR updateLog(bool incomplete) {
 bool ICACHE_FLASH_ATTR initLogFile() {
   bool ret = true;
   fsWorking = true;
-  if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Going to delete Log File...");
+  if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Going to delete Log File...");
   File logFile = SPIFFS.open("/latestlog.json", "w");
   if (logFile) {
     StaticJsonDocument<35> jsonDoc;
@@ -688,11 +688,11 @@ bool ICACHE_FLASH_ATTR initLogFile() {
     jsonDoc.createNestedArray("list");
     serializeJson(jsonDoc, logFile);
     logFile.close();
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] ... Success!");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] ... Success!");
     ret = true;
   }
   else {
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] ... Failure!");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] ... Failure!");
     ret = false;
   }
   delay(100);
@@ -746,7 +746,7 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
     }
     evseErrorCount ++;
     mbErrCount ++;
-    slog.log(ntp.iso8601DateTime() + "[ ModBus ] Error ");
+    slog.log(ntp.iso8601DateTime() + "[ModBus] Error ");
     slog.log(result, true);
     slog.logln(" occured while getting EVSE Register 1000+");
     evseNode.clearTransmitBuffer();
@@ -758,7 +758,7 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
   mbReadCount ++;
   // register successfully read
   /*
-  if(config.getSystemDebug()) slog.log("[ ModBus ] got EVSE Register 1000+ successfully - Last action ");
+  if(config.getSystemDebug()) slog.log("[ModBus] got EVSE Register 1000+ successfully - Last action ");
   if(config.getSystemDebug()) slog.log((millis() - lastModbusAction));
   if(config.getSystemDebug()) slog.log(" ms ago - MB errors total: ");
   if(config.getSystemDebug()) slog.log(mbErrCount);
@@ -829,7 +829,7 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
       if (vehicleCharging == true && manualStop == false) {   //vehicle interrupted charging
         stopChargingTimestamp = ntp.getUtcTimeNow();
         vehicleCharging = false;
-        if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Vehicle interrupted charging");
+        if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Vehicle interrupted charging");
         updateLog(false);
       }
       evseActive = false;
@@ -865,7 +865,7 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
         toDeactivateEVSE = true;
         lastUID = "vehicle";
         lastUsername = "vehicle";
-        if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Vehicle interrupted charging");
+        if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Vehicle interrupted charging");
       }
       evseStatus = 1; // ready
       evseActive = true;
@@ -878,7 +878,7 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
           toDeactivateEVSE = true;
           lastUID = "vehicle";
           lastUsername = "vehicle";
-          if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Vehicle interrupted charging");
+          if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Vehicle interrupted charging");
         }
         evseStatus = 2; //vehicle detected
         evseActive = true;
@@ -893,7 +893,7 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
           vehicleCharging = true;
           lastUID = "vehicle";
           lastUsername = "vehicle";
-          if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Vehicle started charging");
+          if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Vehicle started charging");
         }
         evseStatus = 3; //charging
         evseActive = true;
@@ -913,7 +913,7 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
           toDeactivateEVSE = true;
           lastUID = "API";
           lastUsername = "API";
-          if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] API interrupted charging");
+          if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] API interrupted charging");
         }
       }
       else {
@@ -925,7 +925,7 @@ bool ICACHE_FLASH_ATTR queryEVSE(bool startup = false) {
         vehicleCharging = false;
         lastUID = "vehicle";
         lastUsername = "vehicle";
-        if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Vehicle interrupted charging");
+        if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Vehicle interrupted charging");
         updateLog(false);
       }
       evseActive = false;
@@ -955,7 +955,7 @@ bool ICACHE_FLASH_ATTR getAdditionalEVSEData() {
     evseErrorCount ++;
     mbErrCount ++;
     evseVehicleState = 0;
-    slog.log(ntp.iso8601DateTime() + "[ ModBus ] Error ");
+    slog.log(ntp.iso8601DateTime() + "[ModBus] Error ");
     slog.log(result, true);
     slog.logln(" occured while getting EVSE Register 2000+");
     evseNode.clearTransmitBuffer();
@@ -968,7 +968,7 @@ bool ICACHE_FLASH_ATTR getAdditionalEVSEData() {
     mbReadCount ++;
     // register successfully read
     /*
-    if(config.getSystemDebug()) slog.log("[ ModBus ] got EVSE Register 2000+ successfully - Last action ");
+    if(config.getSystemDebug()) slog.log("[ModBus] got EVSE Register 2000+ successfully - Last action ");
     if(config.getSystemDebug()) slog.log((millis() - lastModbusAction));
     if(config.getSystemDebug()) slog.log(" ms ago - MB errors total: ");
     if(config.getSystemDebug()) slog.log(mbErrCount);
@@ -1030,7 +1030,7 @@ bool ICACHE_FLASH_ATTR activateEVSE() {
 
       if (result != 0) {
         // error occured
-        slog.log(ntp.iso8601DateTime() + "[ ModBus ] Error ");
+        slog.log(ntp.iso8601DateTime() + "[ModBus] Error ");
         slog.log(result, true);
         slog.logln(" occured while activating EVSE - trying again...");
         if (config.getEvseLedConfig(0) == 3) changeLedTimes(300, 300);
@@ -1042,11 +1042,11 @@ bool ICACHE_FLASH_ATTR activateEVSE() {
       startChargingTimestamp = ntp.getUtcTimeNow();
       manualStop = false;
       // register successfully written
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ ModBus ] EVSE successfully activated");
+      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ModBus] EVSE successfully activated");
     }
   }
   else {
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ ModBus ] EVSE already active");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ModBus] EVSE already active");
   }
 
   
@@ -1076,7 +1076,7 @@ bool ICACHE_FLASH_ATTR deactivateEVSE(bool logUpdate) {
 
     if (result != 0) {
       // error occured
-      slog.log(ntp.iso8601DateTime() + "[ ModBus ] Error ");
+      slog.log(ntp.iso8601DateTime() + "[ModBus] Error ");
       slog.log(result, true);
       slog.logln(" occured while deactivating EVSE - trying again...");
       if (config.getEvseLedConfig(0) == 3) changeLedTimes(300, 300);
@@ -1085,7 +1085,7 @@ bool ICACHE_FLASH_ATTR deactivateEVSE(bool logUpdate) {
     }
 
     // register successfully written
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ ModBus ] EVSE successfully deactivated");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ModBus] EVSE successfully deactivated");
     evseActive = false;
     stopChargingTimestamp = ntp.getUtcTimeNow();
   }
@@ -1102,7 +1102,7 @@ bool ICACHE_FLASH_ATTR deactivateEVSE(bool logUpdate) {
   }
   sendEVSEdata();
 
-  if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] EVSE successfully deactivated");
+  if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] EVSE successfully deactivated");
   return true;
 }
 
@@ -1162,7 +1162,7 @@ bool ICACHE_FLASH_ATTR setEVSERegister(uint16_t reg, uint16_t val) {
 
     if (result != 0) {
       // error occured
-      slog.log(ntp.iso8601DateTime() + "[ ModBus ] Error ");
+      slog.log(ntp.iso8601DateTime() + "[ModBus] Error ");
       slog.log(result, true);
       slog.logln(" occured while setting EVSE Register " + (String)reg + " to " + (String)val);
       if (config.getEvseLedConfig(0) == 3) changeLedTimes(300, 300);
@@ -1170,7 +1170,7 @@ bool ICACHE_FLASH_ATTR setEVSERegister(uint16_t reg, uint16_t val) {
     }
     else {
       // register successfully written
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ ModBus ] Register " + (String)reg + " successfully set to " + (String)val);
+      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ModBus] Register " + (String)reg + " successfully set to " + (String)val);
       millisUpdateEvse = millis() + 100;
       return true;
     }
@@ -1345,12 +1345,12 @@ void ICACHE_FLASH_ATTR processWsEvent(JsonDocument& root, AsyncWebSocketClient *
     fsWorking = false;
   }
   else if (strcmp(command, "configfile") == 0) {
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Try to update config.json...");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Try to update config.json...");
     String configString;
     serializeJson(root, configString);
 
     if (config.checkUpdateConfig(configString, setEVSERegister) && config.updateConfig(configString)) {
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Success - going to reboot now");
+      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Success - going to reboot now");
       if (vehicleCharging) {
         deactivateEVSE(true);
         delay(100);
@@ -1360,7 +1360,7 @@ void ICACHE_FLASH_ATTR processWsEvent(JsonDocument& root, AsyncWebSocketClient *
       #endif
     }
     else {
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Could not save config.json");
+      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Could not save config.json");
     }
   }
   else if (strcmp(command, "status") == 0) {
@@ -1373,7 +1373,7 @@ void ICACHE_FLASH_ATTR processWsEvent(JsonDocument& root, AsyncWebSocketClient *
     File userFile = SPIFFS.open(filename, "w+");
     if (userFile) {
       userFile.print(msg);
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Userfile written!");
+      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Userfile written!");
     }
     userFile.close();
     ws.textAll("{\"command\":\"result\",\"resultof\":\"userfile\",\"result\": true}");
@@ -1392,7 +1392,7 @@ void ICACHE_FLASH_ATTR processWsEvent(JsonDocument& root, AsyncWebSocketClient *
         logFile.close();
       }
       else {
-        slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Error while reading log file");
+        slog.logln(ntp.iso8601DateTime() + "[System] Error while reading log file");
       }
       delay(10);
       fsWorking = false;
@@ -1458,7 +1458,7 @@ void ICACHE_FLASH_ATTR processWsEvent(JsonDocument& root, AsyncWebSocketClient *
     }
   }
   else if (strcmp(command, "initlog") == 0) {
-    if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ SYSTEM ] Websocket Command \"initlog\"...");
+    if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[System] Websocket Command \"initlog\"...");
     toDeactivateEVSE = true;
     toInitLog = true;
   }
@@ -1469,7 +1469,7 @@ void ICACHE_FLASH_ATTR processWsEvent(JsonDocument& root, AsyncWebSocketClient *
     sendEvseTimer(client);
   }
   else if (strcmp(command, "timer") == 0) {
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Try to update timer.json...");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Try to update timer.json...");
     File timerFile = SPIFFS.open("/timer.json", "w+");
     if (timerFile) {
       serializeJsonPretty(root, timerFile);
@@ -1493,7 +1493,7 @@ bool ICACHE_FLASH_ATTR connectSTA(const char* ssid, const char* password) {
   WiFi.mode(WIFI_STA);
 
   WiFi.begin(ssid, password, 0);
-  slog.log(ntp.iso8601DateTime() + "[ INFO ] Trying to connect WiFi: ");
+  slog.log(ntp.iso8601DateTime() + "[Info] Trying to connect WiFi: ");
   slog.log(ssid);
 
   unsigned long now = millis();
@@ -1526,7 +1526,7 @@ bool ICACHE_FLASH_ATTR startAP(const char * ssid, const char * password = NULL) 
   #endif
 
   WiFi.mode(WIFI_AP);
-  slog.log(ntp.iso8601DateTime() + "[ INFO ] Configuring access point... ");
+  slog.log(ntp.iso8601DateTime() + "[Info] Configuring access point... ");
   bool success = WiFi.softAP(ssid, password);
   if (success) {
     slog.logln("Ready");
@@ -1536,21 +1536,21 @@ bool ICACHE_FLASH_ATTR startAP(const char * ssid, const char * password = NULL) 
   }
   // Access Point IP
   IPAddress myIP = WiFi.softAPIP();
-  slog.log(ntp.iso8601DateTime() + "[ INFO ] AP IP address: ");
+  slog.log(ntp.iso8601DateTime() + "[Info] AP IP address: ");
   slog.logln(myIP.toString());
-  slog.log(ntp.iso8601DateTime() + "[ INFO ] AP SSID:");
+  slog.log(ntp.iso8601DateTime() + "[Info] AP SSID:");
   slog.logln(String(ssid));
   isWifiConnected = success;
 
   if (!MDNS.begin(config.getSystemHostname())) {
-    slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Error setting up MDNS responder!");
+    slog.logln(ntp.iso8601DateTime() + "[System] Error setting up MDNS responder!");
   }
 
   return success;
 }
 
 bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
-  slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Loading Config File on Startup...");
+  slog.logln(ntp.iso8601DateTime() + "[System] Loading Config File on Startup...");
   if (configString == "") {
     if (!config.loadConfig()) return false;
   }
@@ -1561,7 +1561,7 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
   
   slog.begin(&ws, config.getSystemDebug(), &syslogDeque);
 
-  if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Check for old config version and renew it");
+  if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Check for old config version and renew it");
   config.renewConfigFile();
 
   delay(300); // wait a few milliseconds to prevent voltage drop...
@@ -1592,10 +1592,10 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
   #endif
 
   if (config.getSystemDebug()) {
-    slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Debug Mode: ON!");
+    slog.logln(ntp.iso8601DateTime() + "[System] Debug Mode: ON!");
   }
   else {
-    slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Debug Mode: OFF!");
+    slog.logln(ntp.iso8601DateTime() + "[System] Debug Mode: OFF!");
   }
 
   if (!config.getSystemWsauth()) {
@@ -1642,13 +1642,13 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
     if (addEvseData.evseReg2005 != reg2005DefaultValues) {
       delay(50);
       setEVSERegister(2005, reg2005DefaultValues);
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] EVSE register 2005 set to 0 -> Always Active Mode");
+      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[Info] EVSE register 2005 set to 0 -> Always Active Mode");
     }
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] EVSE-WiFi runs in always active mode");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[Info] EVSE-WiFi runs in always active mode");
   }
 
   if (config.getWifiWmode() == 1) {
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] EVSE-WiFi is running in AP Mode ");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[Info] EVSE-WiFi is running in AP Mode ");
     WiFi.disconnect(true);
     return startAP(config.getWifiSsid(), config.getWifiPass());
   }
@@ -1675,11 +1675,11 @@ bool ICACHE_FLASH_ATTR loadConfiguration(String configString = "") {
     return false;
   }
   if (!MDNS.begin(config.getSystemHostname())) {
-    slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Error setting up MDNS responder!");
+    slog.logln(ntp.iso8601DateTime() + "[System] Error setting up MDNS responder!");
   }
 
   //slog.logln("");
-  slog.log(ntp.iso8601DateTime() + "[ INFO ] Client IP address: ");
+  slog.log(ntp.iso8601DateTime() + "[Info] Client IP address: ");
   slog.logln(WiFi.localIP().toString());
 
   //Check internet connection
@@ -2004,14 +2004,14 @@ void ICACHE_FLASH_ATTR setWebEvents() {
 }
 
 void ICACHE_FLASH_ATTR fallbacktoAPMode() {
-  if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] EVSE-WiFi is running in Fallback AP Mode");
+  if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[Info] EVSE-WiFi is running in Fallback AP Mode");
   WiFi.disconnect(true);
   if (startAP("EVSE-WiFi-Fallback")) {
-    slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Fallback Mode set successfully!");
+    slog.logln(ntp.iso8601DateTime() + "[System] Fallback Mode set successfully!");
     inFallbackMode = true;
   }
   else {
-    slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Fallback mode failed!");
+    slog.logln(ntp.iso8601DateTime() + "[System] Fallback mode failed!");
   }
 }
 
@@ -2060,7 +2060,7 @@ void ADPS_callback(uint32_t adps)
 void ICACHE_FLASH_ATTR setup() {
   Serial.begin(9600);
   if(config.getSystemDebug()) slog.logln("");
-  if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ INFO ] EVSE-WiFi - version ");
+  if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[Info] EVSE-WiFi - version ");
   if(config.getSystemDebug()) slog.log(swVersion);
   delay(500);
 
@@ -2076,29 +2076,29 @@ void ICACHE_FLASH_ATTR setup() {
   if (config.getEvseLedConfig(0) != 1) {
     pinMode(config.getEvseLedPin(0), OUTPUT);
     changeLedTimes(100, 10000); // Heartbeat by default
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] LED pin set");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] LED pin set");
   }
 
   //Activate the button pin with pullup in any setup to prevent bouncing pin state
     pinMode(config.getButtonPin(0), INPUT_PULLUP);
-    if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[ SYSTEM ] Internal pullup for button pin set: ");
+    if(config.getSystemDebug()) slog.log(ntp.iso8601DateTime() + "[System] Internal pullup for button pin set: ");
     if(config.getSystemDebug()) slog.logln(config.getButtonPin(0));
 
   //Factory Reset when button pressed for 20 sec after boot
   if (digitalRead(config.getButtonPin(0)) == LOW) {
     pinMode(config.getEvseLedPin(0), OUTPUT);
-    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Button Pressed while boot!");
+    if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Button Pressed while boot!");
     digitalWrite(config.getEvseLedPin(0), HIGH);
     unsigned long millisBefore = millis();
     int button = config.getButtonPin(0);
     while (digitalRead(button) == LOW) {  
       if (millis() > (millisBefore + 20000)) {
         factoryReset();
-        slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] System has been reset to factory settings!");
+        slog.logln(ntp.iso8601DateTime() + "[System] System has been reset to factory settings!");
         digitalWrite(config.getEvseLedPin(0), LOW);
       }
       delay(1000);
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ SYSTEM ] Button is pressed...");
+      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[System] Button is pressed...");
     }
   }
 
@@ -2257,7 +2257,7 @@ void IRAM_ATTR loop() {
   }
   else {
     if (wifiInterrupted) {
-      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[ INFO ] WiFi connection successfully reconnected");
+      if(config.getSystemDebug()) slog.logln(ntp.iso8601DateTime() + "[Info] WiFi connection successfully reconnected");
     }
     wifiInterrupted = false;
   }
