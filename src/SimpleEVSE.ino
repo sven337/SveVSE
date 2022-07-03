@@ -176,6 +176,7 @@ void ICACHE_FLASH_ATTR updateRemoteHeartbeat() {
       toSetEVSEcurrent = true;
       currentToSet = 0;
     }
+    Serial.println("Deactivated by lack of remote heartbeat");
     deactivatedByRemoteHeartbeat = true;
   }
   else {
